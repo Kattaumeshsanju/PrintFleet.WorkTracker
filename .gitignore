@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+node_modules/
+.vs/
+*.user
+*.suo
+.DS_Store
+appsettings.*.local.json
+frontend/.env.local
+*.log

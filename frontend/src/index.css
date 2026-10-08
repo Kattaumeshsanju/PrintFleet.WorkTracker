@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-ink: #172033;
+  --color-muted: #6d6458;
+  --color-paper: #f3f0e8;
+  --color-card: #fffdf9;
+  --color-line: #e4dccb;
+  --color-brass: #b7771f;
+  --color-pine: #1d6b60;
+}
+
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--color-paper); color: var(--color-ink); }
+button, input, select, textarea { font: inherit; }
+* { scrollbar-width: thin; scrollbar-color: #cfc4ae transparent; }
