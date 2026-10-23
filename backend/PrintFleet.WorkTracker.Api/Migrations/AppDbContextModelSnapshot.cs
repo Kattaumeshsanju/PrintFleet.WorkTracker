@@ -72,6 +72,10 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DayType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateTime?>("ReopenedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -166,6 +170,28 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.HasIndex("UserId", "WorkDate");
 
                     b.ToTable("DailyWorkEntries");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Department", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Departments");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyTask", b =>
@@ -294,6 +320,9 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -322,6 +351,8 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
+                    b.HasIndex("DepartmentId");
+
                     b.ToTable("Projects");
                 });
 
@@ -333,6 +364,9 @@ namespace PrintFleet.WorkTracker.Api.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -362,6 +396,8 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("Email")
                         .IsUnique();
@@ -426,6 +462,33 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Project", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany("Projects")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.User", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany("Users")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Department", b =>
+                {
+                    b.Navigation("Projects");
+
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyTask", b =>

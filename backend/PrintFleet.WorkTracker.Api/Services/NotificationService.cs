@@ -15,11 +15,13 @@ public class NotificationService : INotificationService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUser _current;
+    private readonly IDepartmentAccess _access;
 
-    public NotificationService(AppDbContext db, ICurrentUser current)
+    public NotificationService(AppDbContext db, ICurrentUser current, IDepartmentAccess access)
     {
         _db = db;
         _current = current;
+        _access = access;
     }
 
     public async Task<IReadOnlyList<NotificationDto>> GetAsync(CancellationToken ct)
@@ -35,9 +37,9 @@ public class NotificationService : INotificationService
     {
         if (!WorkMetrics.IsWeekend(today))
         {
-            var submitted = await _db.DailySubmissions.AnyAsync(
-                x => x.UserId == userId && x.WorkDate == today && x.Status == SubmissionStatuses.Submitted, ct);
-            if (!submitted)
+            var covered = await _db.DailySubmissions.AnyAsync(
+                x => x.UserId == userId && x.WorkDate == today && (x.Status == SubmissionStatuses.Submitted || x.DayType != null), ct);
+            if (!covered)
             {
                 notes.Add(new NotificationDto
                 {
@@ -87,11 +89,12 @@ public class NotificationService : INotificationService
 
     private async Task AddLeadNotes(List<NotificationDto> notes, DateOnly today, CancellationToken ct)
     {
-        var users = await _db.Users.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync(ct);
+        var usersQuery = await _access.ScopeUsersAsync(_db.Users.AsNoTracking().Where(x => x.IsActive), null, ct);
+        var users = await usersQuery.OrderBy(x => x.Name).ToListAsync(ct);
         if (!WorkMetrics.IsWeekend(today))
         {
             var submittedIds = await _db.DailySubmissions.AsNoTracking()
-                .Where(x => x.WorkDate == today && x.Status == SubmissionStatuses.Submitted)
+                .Where(x => x.WorkDate == today && (x.Status == SubmissionStatuses.Submitted || x.DayType != null))
                 .Select(x => x.UserId)
                 .ToListAsync(ct);
             foreach (var user in users.Where(x => !submittedIds.Contains(x.Id)).Take(7))
@@ -108,6 +111,11 @@ public class NotificationService : INotificationService
 
         var previous = today.AddDays(-1);
         while (WorkMetrics.IsWeekend(previous)) previous = previous.AddDays(-1);
+        var markedIds = await _db.DailySubmissions.AsNoTracking()
+            .Where(x => x.WorkDate == previous && x.DayType != null)
+            .Select(x => x.UserId)
+            .ToListAsync(ct);
+        var marked = markedIds.ToHashSet();
         var hours = await _db.DailyWorkEntries.AsNoTracking()
             .Where(x => x.WorkDate == previous)
             .GroupBy(x => x.UserId)
@@ -116,6 +124,7 @@ public class NotificationService : INotificationService
 
         foreach (var user in users)
         {
+            if (marked.Contains(user.Id)) continue;
             var minutes = hours.GetValueOrDefault(user.Id);
             if (minutes == 0)
             {

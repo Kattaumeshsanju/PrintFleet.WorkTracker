@@ -21,9 +21,22 @@ public class ChangePasswordRequest
     public string NewPassword { get; set; } = "";
 }
 
+public class DepartmentDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+public class SaveDepartmentRequest
+{
+    public string Name { get; set; } = "";
+}
+
 public class UserDto
 {
     public Guid Id { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
     public string Role { get; set; } = "";
@@ -39,6 +52,7 @@ public class SaveUserRequest
     public string? Password { get; set; }
     public string? JobTitle { get; set; }
     public string Role { get; set; } = Roles.TeamMember;
+    public Guid? DepartmentId { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -51,6 +65,8 @@ public class ProjectDto
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string Status { get; set; } = "";
+    public Guid? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -62,6 +78,7 @@ public class SaveProjectRequest
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string Status { get; set; } = ProjectStatuses.Active;
+    public Guid? DepartmentId { get; set; }
 }
 
 public class EnsureSheetRequest
@@ -182,7 +199,25 @@ public class DayViewDto
     public DateTime? SubmittedAt { get; set; }
     public bool MonthLocked { get; set; }
     public bool CanEdit { get; set; }
+    public string? DayType { get; set; }
     public IReadOnlyList<DailyEntryDto> Entries { get; set; } = [];
+}
+
+public class MonthTimelineDto
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public Guid UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public string? JobTitle { get; set; }
+    public int TotalMinutes { get; set; }
+    public IReadOnlyList<DayViewDto> Days { get; set; } = [];
+}
+
+public class MarkDayRequest
+{
+    public DateOnly WorkDate { get; set; }
+    public string? DayType { get; set; }
 }
 
 public class SubmitDayRequest
@@ -277,6 +312,7 @@ public class CalendarDayDto
     public bool IsWeekend { get; set; }
     public bool Missing { get; set; }
     public bool LowHours { get; set; }
+    public string? DayType { get; set; }
 }
 
 public class CalendarDto
@@ -324,6 +360,26 @@ public class MonthlyReportDto
     public IReadOnlyList<MonthlyTaskDto> Tasks { get; set; } = [];
 }
 
+public class ProjectSummaryDto
+{
+    public string ProjectName { get; set; } = "";
+    public int ActivityCount { get; set; }
+    public int TotalMinutes { get; set; }
+    public decimal TotalHours { get; set; }
+}
+
+public class RangeReportDto
+{
+    public UserDto Employee { get; set; } = null!;
+    public DateOnly From { get; set; }
+    public DateOnly To { get; set; }
+    public int ActivityCount { get; set; }
+    public int TotalMinutes { get; set; }
+    public decimal TotalHours { get; set; }
+    public IReadOnlyList<ProjectSummaryDto> Projects { get; set; } = [];
+    public IReadOnlyList<DailyEntryDto> Activities { get; set; } = [];
+}
+
 public class TeamReportRowDto
 {
     public Guid UserId { get; set; }
@@ -338,6 +394,16 @@ public class TeamReportRowDto
     public decimal PlannedHours { get; set; }
     public decimal ActualHours { get; set; }
     public decimal CompletionPercent { get; set; }
+    public int AvailableDays { get; set; }
+    public int DaysLogged { get; set; }
+    public int DaysSubmitted { get; set; }
+    public int MissingDays { get; set; }
+    public int LowHourDays { get; set; }
+    public int LeaveDays { get; set; }
+    public int HolidayDays { get; set; }
+    public decimal HoursAttainment { get; set; }
+    public decimal UtilizationPercent { get; set; }
+    public decimal UpdateCompliance { get; set; }
 }
 
 public class TeamReportDto
@@ -350,6 +416,18 @@ public class TeamReportDto
     public decimal PlannedHours { get; set; }
     public decimal ActualHours { get; set; }
     public decimal CompletionPercent { get; set; }
+    public int AvailableDays { get; set; }
+    public int DaysLogged { get; set; }
+    public int MissingDays { get; set; }
+    public int LowHourDays { get; set; }
+    public int LeaveDays { get; set; }
+    public int HolidayDays { get; set; }
+    public int BlockedTasks { get; set; }
+    public decimal HoursAttainment { get; set; }
+    public decimal UtilizationPercent { get; set; }
+    public decimal UpdateCompliance { get; set; }
+    public decimal BlockedPercent { get; set; }
+    public decimal ExpectedHoursPerDay { get; set; } = 8;
     public IReadOnlyList<TeamReportRowDto> Rows { get; set; } = [];
     public IReadOnlyList<StatusCountDto> StatusDistribution { get; set; } = [];
 }

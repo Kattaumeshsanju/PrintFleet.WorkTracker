@@ -7,14 +7,14 @@ import { DayTimeline, EntryList } from "../timeline/DayTimeline";
 import { api, errorText } from "../services/api";
 import { useToast } from "../components/ui";
 import type { MonthlySheet, MyDashboard, TeamDashboard } from "../types";
-import { currentMonthValue, formatMinutes, greeting, longDate, parseMonth } from "../utils/format";
+import { canManage, currentMonthValue, formatMinutes, greeting, longDate, parseMonth } from "../utils/format";
 
 type View = "mine" | "team" | "combined";
 
 export function DashboardPage() {
   const { user } = useAuth();
   const toast = useToast();
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
   const [mine, setMine] = useState<MyDashboard | null>(null);
   const [team, setTeam] = useState<TeamDashboard | null>(null);
   const [sheet, setSheet] = useState<MonthlySheet | null>(null);

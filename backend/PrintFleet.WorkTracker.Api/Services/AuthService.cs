@@ -33,7 +33,7 @@ public class AuthService : IAuthService
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct)
     {
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.Email == email, ct);
+        var user = await _db.Users.Include(x => x.Department).FirstOrDefaultAsync(x => x.Email == email, ct);
         if (user is null || !user.IsActive || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             _logger.LogWarning("Failed login for {Email}", email);
@@ -47,7 +47,7 @@ public class AuthService : IAuthService
 
     public async Task<UserDto> MeAsync(CancellationToken ct)
     {
-        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == _current.UserId && x.IsActive, ct)
+        var user = await _db.Users.AsNoTracking().Include(x => x.Department).FirstOrDefaultAsync(x => x.Id == _current.UserId && x.IsActive, ct)
             ?? throw new AppException("Account was not found.", StatusCodes.Status401Unauthorized);
         return UserMapper.ToDto(user);
     }
@@ -73,6 +73,8 @@ public static class UserMapper
         Id = user.Id,
         Name = user.Name,
         Email = user.Email,
+        DepartmentId = user.DepartmentId,
+        DepartmentName = user.Department?.Name,
         Role = user.Role,
         JobTitle = user.JobTitle,
         IsActive = user.IsActive,

@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { Badge, Button, Field, Loading, Modal, PageHeader, inputClass, useToast } from "../components/ui";
 import { api, errorText } from "../services/api";
-import type { Project } from "../types";
+import type { Department, Project } from "../types";
 import { PROJECT_STATUSES, label } from "../utils/format";
 
-const empty = { name: "", code: "", description: "", startDate: "", endDate: "", status: "Active" };
+const empty = { name: "", code: "", description: "", startDate: "", endDate: "", status: "Active", departmentId: "" };
 
 export function ProjectsPage() {
+  const { user } = useAuth();
+  const admin = user?.role === "Admin";
   const toast = useToast();
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Project | null>(null);
   const [open, setOpen] = useState(false);
@@ -22,6 +26,7 @@ export function ProjectsPage() {
   }
 
   useEffect(() => { load().catch((err) => setError(errorText(err))); }, [search]);
+  useEffect(() => { if (admin) api<Department[]>("/api/departments").then(setDepartments).catch(() => undefined); }, [admin]);
 
   function edit(project: Project | null) {
     setEditing(project);
@@ -32,13 +37,14 @@ export function ProjectsPage() {
       startDate: project.startDate ?? "",
       endDate: project.endDate ?? "",
       status: project.status,
-    } : empty);
+      departmentId: project.departmentId ?? "",
+    } : { ...empty, departmentId: departments[0]?.id ?? "" });
     setOpen(true);
   }
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const body = JSON.stringify({ ...form, startDate: form.startDate || null, endDate: form.endDate || null });
+    const body = JSON.stringify({ ...form, startDate: form.startDate || null, endDate: form.endDate || null, departmentId: form.departmentId || null });
     try {
       if (editing) await api(`/api/projects/${editing.id}`, { method: "PUT", body });
       else await api("/api/projects", { method: "POST", body });
@@ -70,11 +76,12 @@ export function ProjectsPage() {
       <input className="mb-4 w-full max-w-sm rounded-xl border border-line bg-white px-3 py-2" placeholder="Search projects" value={search} onChange={(event) => setSearch(event.target.value)} />
       <div className="overflow-x-auto rounded-2xl border border-line bg-card">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="bg-[#f7f3ea] text-xs tracking-wide text-muted uppercase"><tr>{["Name", "Code", "Description", "Start", "End", "Status", ""].map((heading) => <th key={heading} className="px-3 py-2">{heading}</th>)}</tr></thead>
+          <thead className="bg-[#f7f3ea] text-xs tracking-wide text-muted uppercase"><tr>{["Name", "Department", "Code", "Description", "Start", "End", "Status", ""].map((heading) => <th key={heading} className="px-3 py-2">{heading}</th>)}</tr></thead>
           <tbody>
             {projects.map((project) => (
               <tr key={project.id} className="border-t border-line">
                 <td className="px-3 py-2 font-semibold">{project.name}</td>
+                <td>{project.departmentName ?? "—"}</td>
                 <td className="font-mono">{project.code}</td>
                 <td className="max-w-sm text-muted">{project.description}</td>
                 <td>{project.startDate ?? "—"}</td>
@@ -98,6 +105,14 @@ export function ProjectsPage() {
             <Field label="Start"><input className={inputClass} type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} /></Field>
             <Field label="End"><input className={inputClass} type="date" value={form.endDate} onChange={(event) => setForm({ ...form, endDate: event.target.value })} /></Field>
           </div>
+          {admin ? (
+            <Field label="Department">
+              <select className={inputClass} value={form.departmentId} onChange={(event) => setForm({ ...form, departmentId: event.target.value })} required>
+                <option value="">Choose a department</option>
+                {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+              </select>
+            </Field>
+          ) : null}
           <Field label="Status">
             <select className={inputClass} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
               {PROJECT_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}

@@ -42,12 +42,12 @@ public class UsersController : ControllerBase
 
     public UsersController(IUserService users) => _users = users;
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<UserDto>>> List([FromQuery] bool includeInactive, CancellationToken ct)
         => Ok(await _users.ListAsync(includeInactive, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPost]
     public async Task<ActionResult<UserDto>> Create(SaveUserRequest request, CancellationToken ct)
     {
@@ -55,12 +55,12 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(Overview), new { id = user.Id }, user);
     }
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<UserDto>> Update(Guid id, SaveUserRequest request, CancellationToken ct)
         => Ok(await _users.UpdateAsync(id, request, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
@@ -79,6 +79,27 @@ public class UsersController : ControllerBase
 }
 
 [ApiController]
+[Authorize(Roles = Roles.Managers)]
+[Route("api/departments")]
+public class DepartmentsController : ControllerBase
+{
+    private readonly IDepartmentService _departments;
+
+    public DepartmentsController(IDepartmentService departments) => _departments = departments;
+
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> List(CancellationToken ct)
+        => Ok(await _departments.ListAsync(ct));
+
+    [HttpPost]
+    public async Task<ActionResult<DepartmentDto>> Create(SaveDepartmentRequest request, CancellationToken ct)
+    {
+        var department = await _departments.CreateAsync(request, ct);
+        return Created($"/api/departments/{department.Id}", department);
+    }
+}
+
+[ApiController]
 [Authorize]
 [Route("api/projects")]
 public class ProjectsController : ControllerBase
@@ -91,7 +112,7 @@ public class ProjectsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List([FromQuery] string? search, [FromQuery] string? status, CancellationToken ct)
         => Ok(await _projects.ListAsync(search, status, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> Create(SaveProjectRequest request, CancellationToken ct)
     {
@@ -99,12 +120,12 @@ public class ProjectsController : ControllerBase
         return Created($"/api/projects/{project.Id}", project);
     }
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ProjectDto>> Update(Guid id, SaveProjectRequest request, CancellationToken ct)
         => Ok(await _projects.UpdateAsync(id, request, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
@@ -122,7 +143,7 @@ public class AuditController : ControllerBase
 
     public AuditController(IAuditService audit) => _audit = audit;
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpGet]
     public async Task<ActionResult<PagedResult<AuditLogDto>>> List([FromQuery] int page = 1, [FromQuery] int pageSize = 30, CancellationToken ct = default)
         => Ok(await _audit.ListAsync(page, pageSize, ct));

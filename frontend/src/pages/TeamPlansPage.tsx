@@ -3,13 +3,16 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Badge, Loading, PageHeader } from "../components/ui";
 import { api, errorText } from "../services/api";
-import type { Project, TeamPlans, User } from "../types";
-import { currentMonthValue, formatHours, monthLabel, parseMonth } from "../utils/format";
+import type { Department, Project, TeamPlans, User } from "../types";
+import { canManage, currentMonthValue, formatHours, monthLabel, parseMonth } from "../utils/format";
 
 export function TeamPlansPage() {
   const { user } = useAuth();
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
+  const admin = user?.role === "Admin";
   const [month, setMonth] = useState(currentMonthValue());
+  const [departmentId, setDepartmentId] = useState("");
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [userId, setUserId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [status, setStatus] = useState("");
@@ -22,19 +25,21 @@ export function TeamPlansPage() {
 
   useEffect(() => {
     if (lead) api<User[]>("/api/users").then(setPeople).catch(() => undefined);
+    if (admin) api<Department[]>("/api/departments").then(setDepartments).catch(() => undefined);
     api<Project[]>("/api/projects").then(setProjects).catch(() => undefined);
-  }, [lead]);
+  }, [lead, admin]);
 
   useEffect(() => {
     const { year, month: monthNumber } = parseMonth(month);
     const query = new URLSearchParams({ year: String(year), month: String(monthNumber) });
+    if (departmentId) query.set("departmentId", departmentId);
     if (userId) query.set("userId", userId);
     if (projectId) query.set("projectId", projectId);
     if (status) query.set("status", status);
     if (priority) query.set("priority", priority);
     if (search.trim()) query.set("search", search.trim());
     api<TeamPlans>(`/api/monthly-work/team?${query}`).then(setPlans).catch((err) => setError(errorText(err)));
-  }, [month, userId, projectId, status, priority, search]);
+  }, [month, departmentId, userId, projectId, status, priority, search]);
 
   if (error) return <div className="rounded-2xl bg-rose-50 px-4 py-3 text-rose-800">{error}</div>;
   if (!plans) return <Loading />;
@@ -45,6 +50,7 @@ export function TeamPlansPage() {
       <PageHeader title="Monthly Plans" subtitle={monthLabel(plans.year, plans.month)} />
       <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
         <input className="rounded-xl border border-line bg-white px-3 py-2" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+        {admin ? <select className="rounded-xl border border-line bg-white px-3 py-2" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">All departments</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select> : null}
         <select className="rounded-xl border border-line bg-white px-3 py-2" value={userId} onChange={(event) => setUserId(event.target.value)}>
           <option value="">All employees</option>
           {directory.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}

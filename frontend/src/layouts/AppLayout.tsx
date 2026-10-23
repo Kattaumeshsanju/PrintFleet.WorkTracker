@@ -4,7 +4,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
-import { greeting, label, longDate, todayInput } from "../utils/format";
+import { canManage, greeting, label, longDate, todayInput } from "../utils/format";
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? "bg-white/10 text-white" : "text-[#d5cec2] hover:bg-white/5"}`;
@@ -15,7 +15,7 @@ export function AppLayout() {
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [showNotes, setShowNotes] = useState(false);
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
 
   useEffect(() => {
     let alive = true;

@@ -8,7 +8,12 @@ const LABELS: Record<string, string> = {
   OnHold: "On Hold",
   TeamLead: "Team Lead",
   TeamMember: "Team Member",
+  Admin: "Admin",
 };
+
+export function canManage(role?: string | null) {
+  return role === "TeamLead" || role === "Admin";
+}
 
 export function label(value: string) {
   return LABELS[value] ?? value;

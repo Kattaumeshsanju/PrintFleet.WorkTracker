@@ -1,6 +1,7 @@
 using System.Globalization;
 using ClosedXML.Excel;
 using PrintFleet.WorkTracker.Api.DTOs;
+using PrintFleet.WorkTracker.Api.Models;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -15,6 +16,9 @@ public interface IExportService
     byte[] TeamPdf(TeamReportDto report);
     byte[] DailyExcel(DayViewDto day);
     byte[] DailyPdf(DayViewDto day);
+    byte[] MonthTimelinePdf(MonthTimelineDto timeline);
+    byte[] RangeExcel(RangeReportDto report);
+    byte[] RangePdf(RangeReportDto report);
 }
 
 public class ExportService : IExportService
@@ -101,6 +105,50 @@ public class ExportService : IExportService
             sheet.Cell(row, 10).Value = item.CompletionPercent;
         }
         sheet.Columns().AdjustToContents();
+
+        var kpi = workbook.AddWorksheet("KPIs");
+        kpi.Cell(1, 1).Value = "How these KPIs are calculated";
+        kpi.Cell(2, 1).Value = "Plan completion";
+        kpi.Cell(2, 2).Value = "Completed tasks divided by all monthly tasks.";
+        kpi.Cell(3, 1).Value = "Hours attainment";
+        kpi.Cell(3, 2).Value = "Logged hours divided by planned hours on the monthly tasks.";
+        kpi.Cell(4, 1).Value = "Utilization";
+        kpi.Cell(4, 2).Value = $"Logged hours divided by {report.ExpectedHoursPerDay:0} hours for each weekday that is not Holiday or Leave, up to today.";
+        kpi.Cell(5, 1).Value = "Update compliance";
+        kpi.Cell(5, 2).Value = "Weekdays with a submitted timeline, excluding Holiday and Leave, up to today.";
+        kpi.Cell(6, 1).Value = "Low-hour day";
+        kpi.Cell(6, 2).Value = "A weekday with some time logged, but under 6 hours, and not marked Holiday or Leave.";
+        kpi.Cell(8, 1).Value = "Team plan completion";
+        kpi.Cell(8, 2).Value = report.CompletionPercent;
+        kpi.Cell(9, 1).Value = "Team hours attainment";
+        kpi.Cell(9, 2).Value = report.HoursAttainment;
+        kpi.Cell(10, 1).Value = "Team utilization";
+        kpi.Cell(10, 2).Value = report.UtilizationPercent;
+        kpi.Cell(11, 1).Value = "Team update compliance";
+        kpi.Cell(11, 2).Value = report.UpdateCompliance;
+        kpi.Cell(12, 1).Value = "Missing days";
+        kpi.Cell(12, 2).Value = report.MissingDays;
+        kpi.Cell(13, 1).Value = "Blocked tasks";
+        kpi.Cell(13, 2).Value = report.BlockedTasks;
+        WriteHeader(kpi, 15, "Employee", "Plan completion", "Hours attainment", "Utilization", "Update compliance", "Available days", "Days logged", "Missing", "Low hours", "Leave", "Holiday", "Blocked");
+        var kpiRow = 15;
+        foreach (var item in report.Rows)
+        {
+            kpiRow++;
+            kpi.Cell(kpiRow, 1).Value = item.Name;
+            kpi.Cell(kpiRow, 2).Value = item.CompletionPercent;
+            kpi.Cell(kpiRow, 3).Value = item.HoursAttainment;
+            kpi.Cell(kpiRow, 4).Value = item.UtilizationPercent;
+            kpi.Cell(kpiRow, 5).Value = item.UpdateCompliance;
+            kpi.Cell(kpiRow, 6).Value = item.AvailableDays;
+            kpi.Cell(kpiRow, 7).Value = item.DaysLogged;
+            kpi.Cell(kpiRow, 8).Value = item.MissingDays;
+            kpi.Cell(kpiRow, 9).Value = item.LowHourDays;
+            kpi.Cell(kpiRow, 10).Value = item.LeaveDays;
+            kpi.Cell(kpiRow, 11).Value = item.HolidayDays;
+            kpi.Cell(kpiRow, 12).Value = item.Blocked;
+        }
+        kpi.Columns().AdjustToContents();
         return Save(workbook);
     }
 
@@ -188,7 +236,9 @@ public class ExportService : IExportService
             page.Content().PaddingVertical(12).Column(column =>
             {
                 column.Spacing(4);
-                column.Item().Text($"Planned {report.PlannedTasks}    Completed {report.CompletedTasks}    Planned hours {report.PlannedHours:0.##}    Actual hours {report.ActualHours:0.##}    Completion {report.CompletionPercent:0.#}%");
+                column.Item().Text($"Plan completion {report.CompletionPercent:0.#}%    Hours attainment {report.HoursAttainment:0.#}%    Utilization {report.UtilizationPercent:0.#}%    Updates {report.UpdateCompliance:0.#}%");
+                column.Item().Text($"Planned {report.PlannedTasks}    Completed {report.CompletedTasks}    Blocked {report.BlockedTasks}    Missing days {report.MissingDays}    Low-hour days {report.LowHourDays}");
+                column.Item().Text($"Utilization uses {report.ExpectedHoursPerDay:0} hours on each weekday that is not Holiday or Leave, through today. A low-hour day is under 6 hours.");
                 column.Item().Text(report.IncludesSelf ? "Includes the Team Lead's own work." : "Team members only. The Team Lead is excluded.");
                 column.Item().PaddingTop(8).Table(table =>
                 {
@@ -265,6 +315,208 @@ public class ExportService : IExportService
             Footer(page);
         });
     }).GeneratePdf();
+
+    public byte[] MonthTimelinePdf(MonthTimelineDto timeline) => Document.Create(container =>
+    {
+        container.Page(page =>
+        {
+            page.Size(PageSizes.A4);
+            page.Margin(36);
+            page.DefaultTextStyle(x => x.FontSize(10));
+            page.Header().Text($"{timeline.UserName}  ·  {ReportService.MonthName(timeline.Year, timeline.Month)}").FontSize(18).SemiBold();
+            page.Content().PaddingVertical(12).Column(column =>
+            {
+                column.Spacing(8);
+                column.Item().Text($"Daily timeline from {timeline.Days[0].Date:dd MMM yyyy} to {timeline.Days[^1].Date:dd MMM yyyy}    Total {WorkMetrics.FormatMinutes(timeline.TotalMinutes)}");
+                foreach (var day in timeline.Days)
+                {
+                    column.Item().Column(block =>
+                    {
+                        block.Spacing(2);
+                        block.Item().Text(DayHeading(day)).SemiBold();
+                        if (day.Entries.Count == 0)
+                        {
+                            block.Item().Text(day.DayType ?? (WorkMetrics.IsWeekend(day.Date) ? "Weekend" : "No activities")).FontColor("#6B675E");
+                            return;
+                        }
+
+                        block.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.ConstantColumn(70);
+                                columns.ConstantColumn(55);
+                                columns.RelativeColumn(2);
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn();
+                            });
+                            table.Header(header =>
+                            {
+                                HeaderCell(header.Cell(), "Time");
+                                HeaderCell(header.Cell(), "Duration");
+                                HeaderCell(header.Cell(), "Task");
+                                HeaderCell(header.Cell(), "Activity");
+                                HeaderCell(header.Cell(), "Status");
+                            });
+                            foreach (var entry in day.Entries)
+                            {
+                                BodyCell(table.Cell(), $"{entry.StartTime}–{entry.EndTime}");
+                                BodyCell(table.Cell(), WorkMetrics.FormatMinutes(entry.DurationMinutes));
+                                BodyCell(table.Cell(), entry.MonthlyTaskTitle);
+                                BodyCell(table.Cell(), entry.Description);
+                                BodyCell(table.Cell(), entry.Status);
+                            }
+                        });
+                    });
+                }
+            });
+            Footer(page);
+        });
+    }).GeneratePdf();
+
+    public byte[] RangeExcel(RangeReportDto report)
+    {
+        using var workbook = new XLWorkbook();
+        var summary = workbook.AddWorksheet("Summary");
+        summary.Cell(1, 1).Value = "Employee";
+        summary.Cell(1, 2).Value = report.Employee.Name;
+        summary.Cell(2, 1).Value = "Start date";
+        summary.Cell(2, 2).Value = report.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        summary.Cell(3, 1).Value = "End date";
+        summary.Cell(3, 2).Value = report.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        summary.Cell(4, 1).Value = "Activities";
+        summary.Cell(4, 2).Value = report.ActivityCount;
+        summary.Cell(5, 1).Value = "Total hours";
+        summary.Cell(5, 2).Value = report.TotalHours;
+        summary.Cell(6, 1).Value = "Total";
+        summary.Cell(6, 2).Value = WorkMetrics.FormatMinutes(report.TotalMinutes);
+        if (report.ActivityCount == 0)
+            summary.Cell(8, 1).Value = "No activities in this date range.";
+        else
+        {
+            WriteHeader(summary, 8, "Project", "Activities", "Hours", "Minutes");
+            var row = 8;
+            foreach (var project in report.Projects)
+            {
+                row++;
+                summary.Cell(row, 1).Value = project.ProjectName;
+                summary.Cell(row, 2).Value = project.ActivityCount;
+                summary.Cell(row, 3).Value = project.TotalHours;
+                summary.Cell(row, 4).Value = project.TotalMinutes;
+            }
+        }
+
+        var activities = workbook.AddWorksheet("Activities");
+        WriteHeader(activities, 1, "Date", "Start", "End", "Duration", "Project", "Monthly task", "Activity", "Status", "Remarks");
+        if (report.ActivityCount == 0)
+            activities.Cell(2, 1).Value = "No activities in this date range.";
+        else
+        {
+            var row = 1;
+            foreach (var entry in report.Activities)
+            {
+                row++;
+                activities.Cell(row, 1).Value = entry.WorkDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                activities.Cell(row, 2).Value = entry.StartTime;
+                activities.Cell(row, 3).Value = entry.EndTime;
+                activities.Cell(row, 4).Value = WorkMetrics.FormatMinutes(entry.DurationMinutes);
+                activities.Cell(row, 5).Value = entry.ProjectName ?? "No project";
+                activities.Cell(row, 6).Value = entry.MonthlyTaskTitle;
+                activities.Cell(row, 7).Value = entry.Description;
+                activities.Cell(row, 8).Value = entry.Status;
+                activities.Cell(row, 9).Value = entry.Remarks ?? "";
+            }
+        }
+
+        summary.Columns().AdjustToContents();
+        activities.Columns().AdjustToContents();
+        return Save(workbook);
+    }
+
+    public byte[] RangePdf(RangeReportDto report) => Document.Create(container =>
+    {
+        container.Page(page =>
+        {
+            page.Size(PageSizes.A4);
+            page.Margin(36);
+            page.DefaultTextStyle(x => x.FontSize(10));
+            page.Header().Text($"{report.Employee.Name}  ·  {report.From:dd MMM yyyy} to {report.To:dd MMM yyyy}").FontSize(16).SemiBold();
+            page.Content().PaddingVertical(12).Column(column =>
+            {
+                column.Spacing(4);
+                column.Item().Text($"Activities {report.ActivityCount}    Total {WorkMetrics.FormatMinutes(report.TotalMinutes)}    Hours {report.TotalHours:0.##}");
+                column.Item().PaddingTop(8).Text("Projects").FontSize(13).SemiBold();
+                if (report.Projects.Count == 0)
+                    column.Item().Text("No activities in this date range.").FontColor("#6B675E");
+                else
+                {
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn();
+                            columns.RelativeColumn();
+                        });
+                        table.Header(header =>
+                        {
+                            HeaderCell(header.Cell(), "Project");
+                            HeaderCell(header.Cell(), "Activities");
+                            HeaderCell(header.Cell(), "Hours");
+                        });
+                        foreach (var project in report.Projects)
+                        {
+                            BodyCell(table.Cell(), project.ProjectName);
+                            BodyCell(table.Cell(), project.ActivityCount.ToString(CultureInfo.InvariantCulture));
+                            BodyCell(table.Cell(), project.TotalHours.ToString("0.##", CultureInfo.InvariantCulture));
+                        }
+                    });
+                }
+
+                column.Item().PaddingTop(10).Text("Activities").FontSize(13).SemiBold();
+                if (report.Activities.Count == 0)
+                    column.Item().Text("No activities in this date range.").FontColor("#6B675E");
+                else
+                {
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.ConstantColumn(58);
+                            columns.ConstantColumn(68);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(3);
+                            columns.ConstantColumn(48);
+                        });
+                        table.Header(header =>
+                        {
+                            HeaderCell(header.Cell(), "Date");
+                            HeaderCell(header.Cell(), "Time");
+                            HeaderCell(header.Cell(), "Project");
+                            HeaderCell(header.Cell(), "Activity");
+                            HeaderCell(header.Cell(), "Hours");
+                        });
+                        foreach (var entry in report.Activities)
+                        {
+                            BodyCell(table.Cell(), entry.WorkDate.ToString("dd MMM", CultureInfo.InvariantCulture));
+                            BodyCell(table.Cell(), $"{entry.StartTime}–{entry.EndTime}");
+                            BodyCell(table.Cell(), entry.ProjectName ?? "No project");
+                            BodyCell(table.Cell(), entry.Description);
+                            BodyCell(table.Cell(), WorkMetrics.FormatMinutes(entry.DurationMinutes));
+                        }
+                    });
+                }
+            });
+            Footer(page);
+        });
+    }).GeneratePdf();
+
+    private static string DayHeading(DayViewDto day)
+    {
+        var mark = day.DayType is null ? "" : $"    {day.DayType}";
+        var status = day.SubmissionStatus == SubmissionStatuses.Submitted ? "    Submitted" : "";
+        return $"{day.Date:ddd dd MMM}    {WorkMetrics.FormatMinutes(day.TotalMinutes)}{mark}{status}";
+    }
 
     private static void WriteHeader(IXLWorksheet sheet, int row, params string[] headers)
     {

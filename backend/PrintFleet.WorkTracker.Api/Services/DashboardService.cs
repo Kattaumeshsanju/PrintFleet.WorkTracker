@@ -19,14 +19,16 @@ public class DashboardService : IDashboardService
     private readonly IDailyWorkService _daily;
     private readonly IMonthlyWorkService _monthly;
     private readonly INotificationService _notifications;
+    private readonly IDepartmentAccess _access;
 
-    public DashboardService(AppDbContext db, ICurrentUser current, IDailyWorkService daily, IMonthlyWorkService monthly, INotificationService notifications)
+    public DashboardService(AppDbContext db, ICurrentUser current, IDailyWorkService daily, IMonthlyWorkService monthly, INotificationService notifications, IDepartmentAccess access)
     {
         _db = db;
         _current = current;
         _daily = daily;
         _monthly = monthly;
         _notifications = notifications;
+        _access = access;
     }
 
     public async Task<MyDashboardDto> MyAsync(CancellationToken ct)
@@ -59,19 +61,21 @@ public class DashboardService : IDashboardService
     {
         _current.EnsureLead();
         var day = date ?? DateOnly.FromDateTime(DateTime.Today);
-        var users = await _db.Users.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync(ct);
+        var usersQuery = await _access.ScopeUsersAsync(_db.Users.AsNoTracking().Where(x => x.IsActive), null, ct);
+        var users = await usersQuery.OrderBy(x => x.Name).ToListAsync(ct);
+        var userIds = users.Select(x => x.Id).ToArray();
         var entries = await _db.DailyWorkEntries.AsNoTracking()
             .Include(x => x.User)
             .Include(x => x.MonthlyTask).ThenInclude(x => x.Project)
-            .Where(x => x.WorkDate == day)
+            .Where(x => x.WorkDate == day && userIds.Contains(x.UserId))
             .OrderBy(x => x.StartTime)
             .ToListAsync(ct);
         var submissions = await _db.DailySubmissions.AsNoTracking()
-            .Where(x => x.WorkDate == day)
-            .ToDictionaryAsync(x => x.UserId, x => x.Status, ct);
+            .Where(x => x.WorkDate == day && userIds.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, x => x.DayType ?? x.Status, ct);
 
         var counts = await _db.MonthlyTasks.AsNoTracking()
-            .Where(x => x.Sheet.Year == day.Year && x.Sheet.Month == day.Month && x.Sheet.User.IsActive)
+            .Where(x => x.Sheet.Year == day.Year && x.Sheet.Month == day.Month && userIds.Contains(x.Sheet.UserId))
             .GroupBy(x => x.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
@@ -103,7 +107,7 @@ public class DashboardService : IDashboardService
         {
             Date = day,
             MemberCount = users.Count,
-            UpdatedToday = members.Count(x => x.UpdateStatus == SubmissionStatuses.Submitted),
+            UpdatedToday = members.Count(x => x.UpdateStatus is SubmissionStatuses.Submitted or DayTypes.Holiday or DayTypes.Leave),
             TotalMinutesToday = members.Sum(x => x.TotalMinutes),
             OpenTasks = Count(TaskStatuses.Planned) + Count(TaskStatuses.InProgress),
             CompletedThisMonth = Count(TaskStatuses.Completed),

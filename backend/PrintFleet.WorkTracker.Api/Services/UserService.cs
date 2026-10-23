@@ -22,20 +22,23 @@ public class UserService : IUserService
     private readonly IAuditService _audit;
     private readonly IMonthlyWorkService _monthly;
     private readonly IDailyWorkService _daily;
+    private readonly IDepartmentAccess _access;
 
-    public UserService(AppDbContext db, ICurrentUser current, IAuditService audit, IMonthlyWorkService monthly, IDailyWorkService daily)
+    public UserService(AppDbContext db, ICurrentUser current, IAuditService audit, IMonthlyWorkService monthly, IDailyWorkService daily, IDepartmentAccess access)
     {
         _db = db;
         _current = current;
         _audit = audit;
         _monthly = monthly;
         _daily = daily;
+        _access = access;
     }
 
     public async Task<IReadOnlyList<UserDto>> ListAsync(bool includeInactive, CancellationToken ct)
     {
         _current.EnsureLead();
-        var query = _db.Users.AsNoTracking().AsQueryable();
+        var query = _db.Users.AsNoTracking().Include(x => x.Department).AsQueryable();
+        query = await _access.ScopeUsersAsync(query, null, ct);
         if (!includeInactive) query = query.Where(x => x.IsActive);
         var users = await query.OrderBy(x => x.Name).ToListAsync(ct);
         return users.Select(UserMapper.ToDto).ToList();
@@ -51,9 +54,12 @@ public class UserService : IUserService
         if (await _db.Users.AnyAsync(x => x.Email == email, ct))
             throw new AppException("An employee with that email already exists.", StatusCodes.Status409Conflict);
 
+        var departmentId = await _access.DepartmentForUserAsync(request.DepartmentId, request.Role, ct);
+        await EnsureSingleLeadAsync(request.Role, departmentId, null, ct);
         var user = new User
         {
             Id = Guid.NewGuid(),
+            DepartmentId = departmentId,
             Name = request.Name.Trim(),
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
@@ -71,29 +77,30 @@ public class UserService : IUserService
     public async Task<UserDto> UpdateAsync(Guid id, SaveUserRequest request, CancellationToken ct)
     {
         _current.EnsureLead();
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == id, ct)
+        var user = await _db.Users.Include(x => x.Department).FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
+        await _access.EnsureCanManageUserAsync(user.Id, ct);
+        if (user.Role == Roles.Admin && !await _access.IsAdminAsync(ct))
+            throw new AppException("Only the admin can change the admin account.", StatusCodes.Status403Forbidden);
 
         if (user.Id == _current.UserId && request.Role != user.Role)
             throw new AppException("You cannot change your own role.");
         if (user.Id == _current.UserId && !request.IsActive)
             throw new AppException("You cannot deactivate your own account.");
 
-        if (user.Role == Roles.TeamLead && request.Role != Roles.TeamLead)
-        {
-            var otherLeads = await _db.Users.CountAsync(x => x.Role == Roles.TeamLead && x.IsActive && x.Id != user.Id, ct);
-            if (otherLeads == 0)
-                throw new AppException("The team needs at least one active Team Lead.");
-        }
-
         var email = request.Email.Trim().ToLowerInvariant();
         if (await _db.Users.AnyAsync(x => x.Email == email && x.Id != id, ct))
             throw new AppException("An employee with that email already exists.", StatusCodes.Status409Conflict);
 
+        var departmentId = user.Role == Roles.Admin && request.Role == Roles.Admin
+            ? null
+            : await _access.DepartmentForUserAsync(request.DepartmentId, request.Role, ct);
+        await EnsureSingleLeadAsync(request.Role, departmentId, user.Id, ct);
         user.Name = request.Name.Trim();
         user.Email = email;
         user.JobTitle = WorkMetrics.Clean(request.JobTitle);
         user.Role = request.Role;
+        user.DepartmentId = departmentId;
         user.IsActive = request.IsActive;
         if (!string.IsNullOrWhiteSpace(request.Password))
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
@@ -111,13 +118,9 @@ public class UserService : IUserService
 
         var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
-
-        if (user.Role == Roles.TeamLead)
-        {
-            var otherLeads = await _db.Users.CountAsync(x => x.Role == Roles.TeamLead && x.IsActive && x.Id != user.Id, ct);
-            if (otherLeads == 0)
-                throw new AppException("The team needs at least one active Team Lead.");
-        }
+        await _access.EnsureCanManageUserAsync(user.Id, ct);
+        if (user.Role == Roles.Admin)
+            throw new AppException("The admin account cannot be removed.");
 
         user.IsActive = false;
         _audit.Stage(AuditActions.Updated, "User", user.Id, $"Deactivated {user.Name}");
@@ -126,8 +129,8 @@ public class UserService : IUserService
 
     public async Task<EmployeeOverviewDto> OverviewAsync(Guid id, int year, int month, CancellationToken ct)
     {
-        if (id != _current.UserId) _current.EnsureLead();
-        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct)
+        if (id != _current.UserId) await _access.EnsureCanManageUserAsync(id, ct);
+        var user = await _db.Users.AsNoTracking().Include(x => x.Department).FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
         var sheet = await _monthly.FindSheetAsync(id, year, month, ct);
@@ -175,6 +178,14 @@ public class UserService : IUserService
             BlockedWork = tasks.Where(x => x.Status == TaskStatuses.Blocked).ToList(),
             Remarks = remarks
         };
+    }
+
+    private async Task EnsureSingleLeadAsync(string role, Guid? departmentId, Guid? exceptUserId, CancellationToken ct)
+    {
+        if (role != Roles.TeamLead || departmentId is null) return;
+        var taken = await _db.Users.AnyAsync(x => x.Role == Roles.TeamLead && x.IsActive && x.DepartmentId == departmentId && x.Id != exceptUserId, ct);
+        if (taken)
+            throw new AppException("That department already has a team lead.");
     }
 
     public static TaskCounts CountTasks(IEnumerable<MonthlyTaskDto> tasks)

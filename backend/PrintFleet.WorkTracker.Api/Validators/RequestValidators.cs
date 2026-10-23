@@ -22,6 +22,14 @@ public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRe
     }
 }
 
+public class SaveDepartmentRequestValidator : AbstractValidator<SaveDepartmentRequest>
+{
+    public SaveDepartmentRequestValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
+    }
+}
+
 public class SaveUserRequestValidator : AbstractValidator<SaveUserRequest>
 {
     public SaveUserRequestValidator()
@@ -83,6 +91,17 @@ public class SaveDailyEntryRequestValidator : AbstractValidator<SaveDailyEntryRe
         RuleFor(x => x.Description).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.Remarks).MaximumLength(2000);
         RuleFor(x => x.Status).Must(status => EntryStatuses.All.Contains(status)).WithMessage("Choose a valid status.");
+    }
+}
+
+public class MarkDayRequestValidator : AbstractValidator<MarkDayRequest>
+{
+    public MarkDayRequestValidator()
+    {
+        RuleFor(x => x.WorkDate).NotEmpty();
+        RuleFor(x => x.DayType)
+            .Must(type => string.IsNullOrWhiteSpace(type) || DayTypes.All.Contains(type))
+            .WithMessage("Choose Holiday or Leave.");
     }
 }
 

@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button, Field, Loading, PageHeader, Panel, inputClass, useToast } from "../components/ui";
 import { api, errorText } from "../services/api";
 import type { AuditLog, Paged } from "../types";
-import { label } from "../utils/format";
+import { canManage, label } from "../utils/format";
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -12,7 +12,7 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [audit, setAudit] = useState<Paged<AuditLog> | null>(null);
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
 
   useEffect(() => {
     if (lead) api<Paged<AuditLog>>("/api/audit?page=1&pageSize=25").then(setAudit).catch(() => undefined);

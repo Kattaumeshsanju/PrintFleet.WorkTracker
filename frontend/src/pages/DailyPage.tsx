@@ -7,7 +7,7 @@ import { Badge, Button, Loading, PageHeader, Panel, useToast } from "../componen
 import { DayTimeline } from "../timeline/DayTimeline";
 import { api, downloadFile, errorText } from "../services/api";
 import type { CalendarMonth, DailyEntry, DayView, MonthlySheet, User } from "../types";
-import { formatMinutes, label, todayInput } from "../utils/format";
+import { canManage, formatMinutes, label, todayInput } from "../utils/format";
 
 export function DailyPage() {
   const { user } = useAuth();
@@ -24,7 +24,7 @@ export function DailyPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<DailyEntry | null>(null);
   const [error, setError] = useState("");
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
   const target = userId || user?.id || "";
 
   async function load(nextDate = date, nextUser = userId) {
@@ -74,6 +74,16 @@ export function DailyPage() {
     }
   }
 
+  async function mark(dayType: string | null) {
+    try {
+      await api("/api/daily-work/day-mark", { method: "POST", body: JSON.stringify({ workDate: date, dayType }) });
+      toast(dayType ? `Marked as ${dayType.toLowerCase()}.` : "Mark cleared.");
+      await load();
+    } catch (err) {
+      toast(errorText(err), "error");
+    }
+  }
+
   async function submit() {
     try {
       await api("/api/daily-work/submit", { method: "POST", body: JSON.stringify({ workDate: date }) });
@@ -104,6 +114,11 @@ export function DailyPage() {
         <>
           <Button variant="ghost" onClick={() => downloadFile(`/api/reports/daily/export?date=${date}${target ? `&userId=${target}` : ""}&format=xlsx`, `${day.userName}-${date}.xlsx`).catch((err) => toast(errorText(err), "error"))}>Excel</Button>
           <Button variant="ghost" onClick={() => downloadFile(`/api/reports/daily/export?date=${date}${target ? `&userId=${target}` : ""}&format=pdf`, `${day.userName}-${date}.pdf`).catch((err) => toast(errorText(err), "error"))}>PDF</Button>
+          <Button variant="ghost" onClick={() => {
+            const [year, monthNumber] = date.slice(0, 7).split("-");
+            const owner = lead && userId ? `&userId=${userId}` : "";
+            downloadFile(`/api/reports/daily/month-export?year=${year}&month=${Number(monthNumber)}${owner}`, `${day.userName}-${year}-${monthNumber}-timeline.pdf`).catch((err) => toast(errorText(err), "error"));
+          }}>Month PDF</Button>
           {day.canEdit ? <Button onClick={() => { setEditing(null); setOpen(true); }}>+ Add Work Entry</Button> : null}
         </>
       } />
@@ -119,7 +134,7 @@ export function DailyPage() {
             </select>
           </label>
         ) : null}
-        <Badge value={day.submissionStatus} />
+        <Badge value={day.dayType ?? day.submissionStatus} />
         {day.monthLocked ? <Badge value="Locked" /> : null}
         <div className="ml-auto font-display text-xl font-semibold">Daily total: {formatMinutes(day.totalMinutes)}</div>
       </div>
@@ -128,7 +143,15 @@ export function DailyPage() {
           <button key={item} className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${tab === item ? "bg-ink text-white" : "bg-card ring-1 ring-line"}`} onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
-      {tab === "timeline" ? <Panel><DayTimeline entries={day.entries} onSelect={setSelected} /></Panel> : null}
+      {day.canEdit ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">Mark this date</span>
+          <Button variant={day.dayType === "Holiday" ? "primary" : "ghost"} onClick={() => mark(day.dayType === "Holiday" ? null : "Holiday")}>Holiday</Button>
+          <Button variant={day.dayType === "Leave" ? "primary" : "ghost"} onClick={() => mark(day.dayType === "Leave" ? null : "Leave")}>Leave</Button>
+        </div>
+      ) : null}
+      {day.dayType ? <div className={`mb-4 rounded-2xl px-4 py-3 text-sm ${day.dayType === "Holiday" ? "bg-amber-50 text-amber-950" : "bg-sky-50 text-sky-950"}`}>This date is marked as {day.dayType.toLowerCase()}.</div> : null}
+      {tab === "timeline" ? <Panel><DayTimeline entries={day.entries} dayType={day.dayType} onSelect={setSelected} /></Panel> : null}
       {tab === "table" ? (
         <div className="overflow-x-auto rounded-2xl border border-line bg-card">
           <table className="w-full min-w-[860px] text-left text-sm">

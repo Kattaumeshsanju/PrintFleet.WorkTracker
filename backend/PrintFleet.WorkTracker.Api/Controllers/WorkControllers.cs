@@ -24,12 +24,12 @@ public class MonthlyWorkController : ControllerBase
         => Ok(await _monthly.GetAsync(id, ct));
 
     [HttpGet("team")]
-    public async Task<ActionResult<TeamPlansDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] Guid? userId, [FromQuery] Guid? projectId, [FromQuery] string? status, [FromQuery] string? priority, [FromQuery] string? search, CancellationToken ct)
+    public async Task<ActionResult<TeamPlansDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] Guid? userId, [FromQuery] Guid? projectId, [FromQuery] string? status, [FromQuery] string? priority, [FromQuery] string? search, [FromQuery] Guid? departmentId, CancellationToken ct)
     {
         var today = DateTime.Today;
         if (year == 0) year = today.Year;
         if (month == 0) month = today.Month;
-        return Ok(await _monthly.TeamAsync(year, month, userId, projectId, status, priority, search, ct));
+        return Ok(await _monthly.TeamAsync(year, month, userId, projectId, status, priority, search, departmentId, ct));
     }
 
     [HttpPost("{id:guid}/tasks")]
@@ -39,12 +39,12 @@ public class MonthlyWorkController : ControllerBase
         return Created($"/api/monthly-tasks/{task.Id}", task);
     }
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPost("{id:guid}/lock")]
     public async Task<ActionResult<MonthlySheetDto>> Lock(Guid id, CancellationToken ct)
         => Ok(await _monthly.SetLockAsync(id, true, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpPost("{id:guid}/unlock")]
     public async Task<ActionResult<MonthlySheetDto>> Unlock(Guid id, CancellationToken ct)
         => Ok(await _monthly.SetLockAsync(id, false, ct));
@@ -122,7 +122,11 @@ public class DailyWorkController : ControllerBase
     public async Task<ActionResult<DayViewDto>> Submit(SubmitDayRequest request, CancellationToken ct)
         => Ok(await _daily.SubmitAsync(request.WorkDate, ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [HttpPost("day-mark")]
+    public async Task<ActionResult<DayViewDto>> Mark(MarkDayRequest request, CancellationToken ct)
+        => Ok(await _daily.SetDayMarkAsync(request, ct));
+
+    [Authorize(Roles = Roles.Managers)]
     [HttpPost("reopen")]
     public async Task<ActionResult<DayViewDto>> Reopen(ReopenDayRequest request, CancellationToken ct)
         => Ok(await _daily.ReopenAsync(request, ct));
@@ -141,7 +145,7 @@ public class DashboardController : ControllerBase
     public async Task<ActionResult<MyDashboardDto>> My(CancellationToken ct)
         => Ok(await _dashboard.MyAsync(ct));
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpGet("team")]
     public async Task<ActionResult<TeamDashboardDto>> Team([FromQuery] DateOnly? date, CancellationToken ct)
         => Ok(await _dashboard.TeamAsync(date, ct));
@@ -187,14 +191,14 @@ public class ReportsController : ControllerBase
         return Ok(await _reports.MonthlyAsync(year, month, userId, ct));
     }
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpGet("team")]
-    public async Task<ActionResult<TeamReportDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, CancellationToken ct)
+    public async Task<ActionResult<TeamReportDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, CancellationToken ct)
     {
         var today = DateTime.Today;
         if (year == 0) year = today.Year;
         if (month == 0) month = today.Month;
-        return Ok(await _reports.TeamAsync(year, month, includeSelf, ct));
+        return Ok(await _reports.TeamAsync(year, month, includeSelf, departmentId, ct));
     }
 
     [HttpGet("monthly/export")]
@@ -210,18 +214,39 @@ public class ReportsController : ControllerBase
             : File(_export.MonthlyExcel(report), Excel, $"{name}.xlsx");
     }
 
-    [Authorize(Roles = Roles.TeamLead)]
+    [Authorize(Roles = Roles.Managers)]
     [HttpGet("team/export")]
-    public async Task<IActionResult> TeamExport([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] string format = "xlsx", CancellationToken ct = default)
+    public async Task<IActionResult> TeamExport([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, [FromQuery] string format = "xlsx", CancellationToken ct = default)
     {
         var today = DateTime.Today;
         if (year == 0) year = today.Year;
         if (month == 0) month = today.Month;
-        var report = await _reports.TeamAsync(year, month, includeSelf, ct);
+        var report = await _reports.TeamAsync(year, month, includeSelf, departmentId, ct);
         var name = $"team-{year}-{month:00}";
         return format.Equals("pdf", StringComparison.OrdinalIgnoreCase)
             ? File(_export.TeamPdf(report), "application/pdf", $"{name}.pdf")
             : File(_export.TeamExcel(report), Excel, $"{name}.xlsx");
+    }
+
+    [HttpGet("range/export")]
+    public async Task<IActionResult> RangeExport([FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] Guid? userId, [FromQuery] string format = "pdf", CancellationToken ct = default)
+    {
+        var report = await _reports.RangeAsync(from, to, userId, ct);
+        var name = $"{Slug(report.Employee.Name)}-{from:yyyy-MM-dd}-to-{to:yyyy-MM-dd}";
+        return format.Equals("xlsx", StringComparison.OrdinalIgnoreCase)
+            ? File(_export.RangeExcel(report), Excel, $"{name}.xlsx")
+            : File(_export.RangePdf(report), "application/pdf", $"{name}.pdf");
+    }
+
+    [HttpGet("daily/month-export")]
+    public async Task<IActionResult> MonthTimelineExport([FromQuery] int year, [FromQuery] int month, [FromQuery] Guid? userId, CancellationToken ct = default)
+    {
+        var today = DateTime.Today;
+        if (year == 0) year = today.Year;
+        if (month == 0) month = today.Month;
+        var timeline = await _daily.GetMonthTimelineAsync(year, month, userId, ct);
+        var name = $"{Slug(timeline.UserName)}-{year}-{month:00}-timeline";
+        return File(_export.MonthTimelinePdf(timeline), "application/pdf", $"{name}.pdf");
     }
 
     [HttpGet("daily/export")]

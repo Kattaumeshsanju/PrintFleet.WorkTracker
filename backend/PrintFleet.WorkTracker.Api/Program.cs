@@ -16,6 +16,7 @@ using QuestPDF.Infrastructure;
 QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.local.json", optional: true, reloadOnChange: true);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Set ConnectionStrings__DefaultConnection before starting the API.");
@@ -47,6 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers(options => options.Filters.Add(new ValidationActionFilter()));
+builder.Services.AddScoped<IValidator<SaveDepartmentRequest>, SaveDepartmentRequestValidator>();
 builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IValidator<ChangePasswordRequest>, ChangePasswordRequestValidator>();
 builder.Services.AddScoped<IValidator<SaveUserRequest>, SaveUserRequestValidator>();
@@ -55,11 +57,14 @@ builder.Services.AddScoped<IValidator<EnsureSheetRequest>, EnsureSheetRequestVal
 builder.Services.AddScoped<IValidator<SaveTaskRequest>, SaveTaskRequestValidator>();
 builder.Services.AddScoped<IValidator<SaveDailyEntryRequest>, SaveDailyEntryRequestValidator>();
 builder.Services.AddScoped<IValidator<SubmitDayRequest>, SubmitDayRequestValidator>();
+builder.Services.AddScoped<IValidator<MarkDayRequest>, MarkDayRequestValidator>();
 builder.Services.AddScoped<IValidator<ReopenDayRequest>, ReopenDayRequestValidator>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IDepartmentAccess, DepartmentAccess>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IMonthlyWorkService, MonthlyWorkService>();
@@ -69,6 +74,9 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IExportService, ExportService>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddHostedService<DailyReminderService>();
 
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>

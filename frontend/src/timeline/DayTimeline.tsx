@@ -13,7 +13,7 @@ function minutes(value: string) {
   return hours * 60 + mins;
 }
 
-export function DayTimeline({ entries, onSelect }: { entries: DailyEntry[]; onSelect?: (entry: DailyEntry) => void }) {
+export function DayTimeline({ entries, dayType, onSelect }: { entries: DailyEntry[]; dayType?: string | null; onSelect?: (entry: DailyEntry) => void }) {
   const bounds = useMemo(() => {
     if (entries.length === 0) return { start: 8 * 60, end: 18 * 60 };
     const starts = entries.map((entry) => minutes(entry.startTime));
@@ -28,7 +28,7 @@ export function DayTimeline({ entries, onSelect }: { entries: DailyEntry[]; onSe
   for (let tick = Math.floor(bounds.start / 60) * 60; tick <= bounds.end; tick += 60) ticks.push(tick);
 
   if (entries.length === 0) {
-    return <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">No activities on this day yet.</div>;
+    return <div className={`rounded-xl border border-dashed px-4 py-8 text-center text-sm ${dayType === "Holiday" ? "border-amber-300 bg-amber-50 text-amber-950" : dayType === "Leave" ? "border-sky-300 bg-sky-50 text-sky-950" : "border-line text-muted"}`}>{dayType ? `Marked as ${dayType.toLowerCase()}.` : "No activities on this day yet."}</div>;
   }
 
   return (

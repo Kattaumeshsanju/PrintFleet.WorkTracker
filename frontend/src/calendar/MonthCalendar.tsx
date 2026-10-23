@@ -20,14 +20,14 @@ export function MonthCalendar({ days, selected, onPick }: { days: CalendarDay[];
             key={day.date}
             type="button"
             onClick={() => onPick(day.date)}
-            className={`min-h-20 rounded-xl border p-2 text-left ${day.date === selected ? "border-brass bg-[#fff6e8]" : "border-line bg-card"} ${day.isWeekend ? "opacity-70" : ""}`}
+            className={`min-h-20 rounded-xl border p-2 text-left ${day.date === selected ? "border-brass bg-[#fff6e8]" : day.dayType === "Holiday" ? "border-amber-200 bg-amber-50" : day.dayType === "Leave" ? "border-sky-200 bg-sky-50" : "border-line bg-card"} ${day.isWeekend && !day.dayType ? "opacity-70" : ""}`}
           >
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold">{Number(day.date.slice(8))}</span>
-              <span className={`h-2 w-2 rounded-full ${day.isWeekend ? "bg-stone-300" : day.missing ? "bg-amber-500" : day.lowHours ? "bg-orange-400" : "bg-pine"}`} />
+              <span className={`h-2 w-2 rounded-full ${day.dayType === "Holiday" ? "bg-brass" : day.dayType === "Leave" ? "bg-sky-600" : day.isWeekend ? "bg-stone-300" : day.missing ? "bg-amber-500" : day.lowHours ? "bg-orange-400" : "bg-pine"}`} />
             </div>
-            <div className="mt-3 font-mono text-sm">{day.minutes > 0 ? formatMinutes(day.minutes) : day.isWeekend ? "Weekend" : "—"}</div>
-            <div className="text-[11px] text-muted">{day.isWeekend ? "Holiday" : day.missing ? "Missing" : day.submitted ? "Updated" : "Open"}</div>
+            <div className="mt-3 font-mono text-sm">{day.dayType ? day.dayType : day.minutes > 0 ? formatMinutes(day.minutes) : day.isWeekend ? "Weekend" : "—"}</div>
+            <div className="text-[11px] text-muted">{day.dayType ? "Marked" : day.isWeekend ? "Weekend" : day.missing ? "Missing" : day.submitted ? "Updated" : "Open"}</div>
           </button>
         ) : <div key={`pad-${index}`} />)}
       </div>

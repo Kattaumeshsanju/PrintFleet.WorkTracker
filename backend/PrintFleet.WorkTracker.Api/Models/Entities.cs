@@ -1,8 +1,20 @@
 namespace PrintFleet.WorkTracker.Api.Models;
 
+public class Department
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+
+    public ICollection<User> Users { get; set; } = new List<User>();
+    public ICollection<Project> Projects { get; set; } = new List<Project>();
+}
+
 public class User
 {
     public Guid Id { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
     public string PasswordHash { get; set; } = "";
@@ -19,6 +31,8 @@ public class User
 public class Project
 {
     public Guid Id { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";
     public string? Description { get; set; }
@@ -96,6 +110,7 @@ public class DailySubmission
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
     public DateOnly WorkDate { get; set; }
+    public string? DayType { get; set; }
     public string Status { get; set; } = SubmissionStatuses.Pending;
     public DateTime? SubmittedAt { get; set; }
     public Guid? SubmittedBy { get; set; }

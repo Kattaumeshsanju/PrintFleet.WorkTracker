@@ -1,7 +1,11 @@
-export type Role = "TeamLead" | "TeamMember";
+export type Role = "Admin" | "TeamLead" | "TeamMember";
+
+export type Department = { id: string; name: string };
 
 export type User = {
   id: string;
+  departmentId: string | null;
+  departmentName: string | null;
   name: string;
   email: string;
   role: Role;
@@ -18,6 +22,8 @@ export type Project = {
   startDate: string | null;
   endDate: string | null;
   status: string;
+  departmentId: string | null;
+  departmentName: string | null;
   createdAt: string;
 };
 
@@ -89,6 +95,7 @@ export type DayView = {
   submittedAt: string | null;
   monthLocked: boolean;
   canEdit: boolean;
+  dayType: string | null;
   entries: DailyEntry[];
 };
 
@@ -159,6 +166,7 @@ export type CalendarDay = {
   isWeekend: boolean;
   missing: boolean;
   lowHours: boolean;
+  dayType: string | null;
 };
 
 export type CalendarMonth = {
@@ -206,6 +214,16 @@ export type TeamReportRow = {
   plannedHours: number;
   actualHours: number;
   completionPercent: number;
+  availableDays: number;
+  daysLogged: number;
+  daysSubmitted: number;
+  missingDays: number;
+  lowHourDays: number;
+  leaveDays: number;
+  holidayDays: number;
+  hoursAttainment: number;
+  utilizationPercent: number;
+  updateCompliance: number;
 };
 
 export type TeamReport = {
@@ -217,6 +235,18 @@ export type TeamReport = {
   plannedHours: number;
   actualHours: number;
   completionPercent: number;
+  availableDays: number;
+  daysLogged: number;
+  missingDays: number;
+  lowHourDays: number;
+  leaveDays: number;
+  holidayDays: number;
+  blockedTasks: number;
+  hoursAttainment: number;
+  utilizationPercent: number;
+  updateCompliance: number;
+  blockedPercent: number;
+  expectedHoursPerDay: number;
   rows: TeamReportRow[];
   statusDistribution: StatusCount[];
 };

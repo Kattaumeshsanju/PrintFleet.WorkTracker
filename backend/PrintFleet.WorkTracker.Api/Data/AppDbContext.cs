@@ -9,6 +9,7 @@ public class AppDbContext : DbContext
     {
     }
 
+    public DbSet<Department> Departments => Set<Department>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<MonthlyWorkSheet> MonthlyWorkSheets => Set<MonthlyWorkSheet>();
@@ -19,8 +20,14 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var department = modelBuilder.Entity<Department>();
+        department.HasIndex(x => x.Name).IsUnique();
+        department.Property(x => x.Name).HasMaxLength(120).IsRequired();
+
         var user = modelBuilder.Entity<User>();
         user.HasIndex(x => x.Email).IsUnique();
+        user.HasIndex(x => x.DepartmentId);
+        user.HasOne(x => x.Department).WithMany(x => x.Users).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
         user.Property(x => x.Name).HasMaxLength(120).IsRequired();
         user.Property(x => x.Email).HasMaxLength(200).IsRequired();
         user.Property(x => x.PasswordHash).HasMaxLength(200).IsRequired();
@@ -29,6 +36,8 @@ public class AppDbContext : DbContext
 
         var project = modelBuilder.Entity<Project>();
         project.HasIndex(x => x.Code).IsUnique();
+        project.HasIndex(x => x.DepartmentId);
+        project.HasOne(x => x.Department).WithMany(x => x.Projects).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
         project.Property(x => x.Name).HasMaxLength(160).IsRequired();
         project.Property(x => x.Code).HasMaxLength(20).IsRequired();
         project.Property(x => x.Description).HasMaxLength(2000);
@@ -69,6 +78,7 @@ public class AppDbContext : DbContext
         submission.HasIndex(x => new { x.UserId, x.WorkDate }).IsUnique();
         submission.HasIndex(x => x.WorkDate);
         submission.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        submission.Property(x => x.DayType).HasMaxLength(20);
         submission.HasOne(x => x.User).WithMany(x => x.Submissions).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
 
         var audit = modelBuilder.Entity<AuditLog>();

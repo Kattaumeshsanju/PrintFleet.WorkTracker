@@ -9,6 +9,7 @@ public interface ICurrentUser
     string Name { get; }
     string Email { get; }
     string Role { get; }
+    bool IsAdmin { get; }
     bool IsTeamLead { get; }
     void EnsureLead();
 }
@@ -29,7 +30,8 @@ public class CurrentUser : ICurrentUser
     public string Name { get; }
     public string Email { get; }
     public string Role { get; }
-    public bool IsTeamLead => Role == Roles.TeamLead;
+    public bool IsAdmin => Role == Roles.Admin;
+    public bool IsTeamLead => Role is Roles.TeamLead or Roles.Admin;
 
     public void EnsureLead()
     {

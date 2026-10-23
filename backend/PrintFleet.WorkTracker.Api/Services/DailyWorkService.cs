@@ -14,8 +14,10 @@ public interface IDailyWorkService
     Task<DailyEntryDto> UpdateAsync(Guid id, SaveDailyEntryRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
     Task<DayViewDto> SubmitAsync(DateOnly date, CancellationToken ct);
+    Task<DayViewDto> SetDayMarkAsync(MarkDayRequest request, CancellationToken ct);
     Task<DayViewDto> ReopenAsync(ReopenDayRequest request, CancellationToken ct);
     Task<CalendarDto> GetCalendarAsync(int year, int month, Guid? userId, CancellationToken ct);
+    Task<MonthTimelineDto> GetMonthTimelineAsync(int year, int month, Guid? userId, CancellationToken ct);
 }
 
 public class DailyWorkService : IDailyWorkService
@@ -23,12 +25,14 @@ public class DailyWorkService : IDailyWorkService
     private readonly AppDbContext _db;
     private readonly ICurrentUser _current;
     private readonly IAuditService _audit;
+    private readonly IDepartmentAccess _access;
 
-    public DailyWorkService(AppDbContext db, ICurrentUser current, IAuditService audit)
+    public DailyWorkService(AppDbContext db, ICurrentUser current, IAuditService audit, IDepartmentAccess access)
     {
         _db = db;
         _current = current;
         _audit = audit;
+        _access = access;
     }
 
     public async Task<PagedResult<DailyEntryDto>> ListAsync(DailyWorkQuery query, CancellationToken ct)
@@ -76,7 +80,7 @@ public class DailyWorkService : IDailyWorkService
 
     public async Task<DayViewDto> GetDayAsync(DateOnly date, Guid? userId, CancellationToken ct)
     {
-        var target = ResolveUser(userId);
+        var target = await ResolveUserAsync(userId, ct);
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
@@ -98,6 +102,7 @@ public class DailyWorkService : IDailyWorkService
             SubmittedAt = submission?.SubmittedAt,
             MonthLocked = locked,
             CanEdit = target == _current.UserId && !locked && !submitted,
+            DayType = submission?.DayType,
             Entries = entries.Select(MapEntry).ToList()
         };
     }
@@ -201,6 +206,48 @@ public class DailyWorkService : IDailyWorkService
         return await GetDayAsync(date, userId, ct);
     }
 
+    public async Task<DayViewDto> SetDayMarkAsync(MarkDayRequest request, CancellationToken ct)
+    {
+        var userId = _current.UserId;
+        await EnsureMonthOpen(userId, request.WorkDate, ct);
+        var submission = await _db.DailySubmissions.FirstOrDefaultAsync(x => x.UserId == userId && x.WorkDate == request.WorkDate, ct);
+        if (submission?.Status == SubmissionStatuses.Submitted)
+            throw new AppException("This day is submitted. The Team Lead must reopen it before the mark can change.");
+
+        var dayType = string.IsNullOrWhiteSpace(request.DayType) ? null : request.DayType;
+        if (dayType is null)
+        {
+            if (submission is not null)
+            {
+                if (submission.SubmittedAt is null)
+                    _db.DailySubmissions.Remove(submission);
+                else
+                    submission.DayType = null;
+                _audit.Stage(AuditActions.Updated, "DailySubmission", submission.Id, $"Cleared the mark on {request.WorkDate:yyyy-MM-dd}");
+            }
+        }
+        else
+        {
+            if (submission is null)
+            {
+                submission = new DailySubmission
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    WorkDate = request.WorkDate,
+                    Status = SubmissionStatuses.Pending
+                };
+                _db.DailySubmissions.Add(submission);
+            }
+
+            submission.DayType = dayType;
+            _audit.Stage(AuditActions.Updated, "DailySubmission", submission.Id, $"Marked {request.WorkDate:yyyy-MM-dd} as {dayType}");
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return await GetDayAsync(request.WorkDate, userId, ct);
+    }
+
     public async Task<DayViewDto> ReopenAsync(ReopenDayRequest request, CancellationToken ct)
     {
         _current.EnsureLead();
@@ -220,7 +267,7 @@ public class DailyWorkService : IDailyWorkService
     public async Task<CalendarDto> GetCalendarAsync(int year, int month, Guid? userId, CancellationToken ct)
     {
         if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
-        var target = ResolveUser(userId);
+        var target = await ResolveUserAsync(userId, ct);
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
@@ -236,6 +283,9 @@ public class DailyWorkService : IDailyWorkService
             .Select(x => x.WorkDate)
             .ToListAsync(ct);
         var submittedSet = submitted.ToHashSet();
+        var marks = await _db.DailySubmissions.AsNoTracking()
+            .Where(x => x.UserId == target && x.WorkDate >= start && x.WorkDate < end && x.DayType != null)
+            .ToDictionaryAsync(x => x.WorkDate, x => x.DayType!, ct);
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         var days = new List<CalendarDayDto>();
@@ -244,6 +294,8 @@ public class DailyWorkService : IDailyWorkService
             totals.TryGetValue(date, out var info);
             var weekend = WorkMetrics.IsWeekend(date);
             var isSubmitted = submittedSet.Contains(date);
+            marks.TryGetValue(date, out var dayType);
+            var marked = dayType is not null;
             days.Add(new CalendarDayDto
             {
                 Date = date,
@@ -251,12 +303,64 @@ public class DailyWorkService : IDailyWorkService
                 EntryCount = info.Count,
                 Submitted = isSubmitted,
                 IsWeekend = weekend,
-                Missing = !weekend && date <= today && !isSubmitted,
-                LowHours = !weekend && date <= today && info.Minutes > 0 && info.Minutes < 360
+                Missing = !weekend && date <= today && !isSubmitted && !marked,
+                LowHours = !weekend && !marked && date <= today && info.Minutes > 0 && info.Minutes < 360,
+                DayType = dayType
             });
         }
 
         return new CalendarDto { Year = year, Month = month, UserId = user.Id, UserName = user.Name, Days = days };
+    }
+
+    public async Task<MonthTimelineDto> GetMonthTimelineAsync(int year, int month, Guid? userId, CancellationToken ct)
+    {
+        if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
+        var target = await ResolveUserAsync(userId, ct);
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
+            ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
+
+        var start = new DateOnly(year, month, 1);
+        var end = start.AddMonths(1);
+        var entries = await BaseQuery()
+            .Where(x => x.UserId == target && x.WorkDate >= start && x.WorkDate < end)
+            .OrderBy(x => x.WorkDate).ThenBy(x => x.StartTime)
+            .ToListAsync(ct);
+        var submissions = await _db.DailySubmissions.AsNoTracking()
+            .Where(x => x.UserId == target && x.WorkDate >= start && x.WorkDate < end)
+            .ToListAsync(ct);
+        var byDate = entries.GroupBy(x => x.WorkDate).ToDictionary(g => g.Key, g => g.ToList());
+        var bySubmission = submissions.ToDictionary(x => x.WorkDate);
+
+        var days = new List<DayViewDto>();
+        for (var date = start; date < end; date = date.AddDays(1))
+        {
+            byDate.TryGetValue(date, out var dayEntries);
+            dayEntries ??= [];
+            bySubmission.TryGetValue(date, out var submission);
+            days.Add(new DayViewDto
+            {
+                Date = date,
+                UserId = user.Id,
+                UserName = user.Name,
+                JobTitle = user.JobTitle,
+                TotalMinutes = dayEntries.Sum(x => x.DurationMinutes),
+                SubmissionStatus = submission?.Status ?? SubmissionStatuses.Pending,
+                SubmittedAt = submission?.SubmittedAt,
+                DayType = submission?.DayType,
+                Entries = dayEntries.Select(MapEntry).ToList()
+            });
+        }
+
+        return new MonthTimelineDto
+        {
+            Year = year,
+            Month = month,
+            UserId = user.Id,
+            UserName = user.Name,
+            JobTitle = user.JobTitle,
+            TotalMinutes = entries.Sum(x => x.DurationMinutes),
+            Days = days
+        };
     }
 
     private IQueryable<DailyWorkEntry> BaseQuery()
@@ -270,12 +374,11 @@ public class DailyWorkService : IDailyWorkService
         return query;
     }
 
-    private Guid ResolveUser(Guid? requested)
+    private async Task<Guid> ResolveUserAsync(Guid? requested, CancellationToken ct)
     {
         if (requested is null || requested == Guid.Empty || requested == _current.UserId)
             return _current.UserId;
-        if (!_current.IsTeamLead)
-            throw new AppException("You can only access your own work.", StatusCodes.Status403Forbidden);
+        await _access.EnsureCanManageUserAsync(requested.Value, ct);
         return requested.Value;
     }
 

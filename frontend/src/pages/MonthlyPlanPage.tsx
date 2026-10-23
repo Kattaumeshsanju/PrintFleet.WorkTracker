@@ -5,7 +5,7 @@ import { TaskModal } from "../components/TaskModal";
 import { Badge, Button, Loading, PageHeader, useToast } from "../components/ui";
 import { api, errorText } from "../services/api";
 import type { MonthlySheet, MonthlyTask, Project, User } from "../types";
-import { currentMonthValue, formatHours, label, monthLabel, parseMonth, shortDate } from "../utils/format";
+import { canManage, currentMonthValue, formatHours, label, monthLabel, parseMonth, shortDate } from "../utils/format";
 
 export function MonthlyPlanPage() {
   const { user } = useAuth();
@@ -19,7 +19,7 @@ export function MonthlyPlanPage() {
   const [editing, setEditing] = useState<MonthlyTask | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const lead = user?.role === "TeamLead";
+  const lead = canManage(user?.role);
   const locked = sheet?.status === "Locked";
   const own = !requestedUser || requestedUser === user?.id;
   const canEdit = !!sheet && !locked;

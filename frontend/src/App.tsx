@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
+import { canManage } from "./utils/format";
 import { AppLayout } from "./layouts/AppLayout";
 import { DailyPage } from "./pages/DailyPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -23,7 +24,7 @@ function RequireAuth() {
 
 function RequireLead() {
   const { user } = useAuth();
-  if (user?.role !== "TeamLead") return <Navigate to="/" replace />;
+  if (!canManage(user?.role)) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 

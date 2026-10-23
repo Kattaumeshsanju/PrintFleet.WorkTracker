@@ -11,7 +11,7 @@ public interface IMonthlyWorkService
     Task<MonthlySheetDto> EnsureAsync(EnsureSheetRequest request, CancellationToken ct);
     Task<MonthlySheetDto?> FindSheetAsync(Guid userId, int year, int month, CancellationToken ct);
     Task<MonthlySheetDto> GetAsync(Guid id, CancellationToken ct);
-    Task<TeamPlansDto> TeamAsync(int year, int month, Guid? userId, Guid? projectId, string? status, string? priority, string? search, CancellationToken ct);
+    Task<TeamPlansDto> TeamAsync(int year, int month, Guid? userId, Guid? projectId, string? status, string? priority, string? search, Guid? departmentId, CancellationToken ct);
     Task<MonthlyTaskDto> AddTaskAsync(Guid sheetId, SaveTaskRequest request, CancellationToken ct);
     Task<MonthlyTaskDto> UpdateTaskAsync(Guid taskId, SaveTaskRequest request, CancellationToken ct);
     Task DeleteTaskAsync(Guid taskId, CancellationToken ct);
@@ -23,17 +23,20 @@ public class MonthlyWorkService : IMonthlyWorkService
     private readonly AppDbContext _db;
     private readonly ICurrentUser _current;
     private readonly IAuditService _audit;
+    private readonly IDepartmentAccess _access;
 
-    public MonthlyWorkService(AppDbContext db, ICurrentUser current, IAuditService audit)
+    public MonthlyWorkService(AppDbContext db, ICurrentUser current, IAuditService audit, IDepartmentAccess access)
     {
         _db = db;
         _current = current;
         _audit = audit;
+        _access = access;
     }
 
     public async Task<MonthlySheetDto> EnsureAsync(EnsureSheetRequest request, CancellationToken ct)
     {
         var target = request.UserId is null || request.UserId == Guid.Empty ? _current.UserId : request.UserId.Value;
+        await _access.EnsureSameDepartmentAsync(target, ct);
         if (!await _db.Users.AnyAsync(x => x.Id == target && x.IsActive, ct))
             throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
@@ -74,15 +77,17 @@ public class MonthlyWorkService : IMonthlyWorkService
             .Include(x => x.Tasks).ThenInclude(x => x.Project)
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new AppException("Monthly work sheet was not found.", StatusCodes.Status404NotFound);
+        await _access.EnsureSameDepartmentAsync(sheet.UserId, ct);
 
         return await MapSheetAsync(sheet, ct);
     }
 
-    public async Task<TeamPlansDto> TeamAsync(int year, int month, Guid? userId, Guid? projectId, string? status, string? priority, string? search, CancellationToken ct)
+    public async Task<TeamPlansDto> TeamAsync(int year, int month, Guid? userId, Guid? projectId, string? status, string? priority, string? search, Guid? departmentId, CancellationToken ct)
     {
         if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
 
-        var usersQuery = _db.Users.AsNoTracking().Where(x => x.IsActive);
+        var usersQuery = _db.Users.AsNoTracking().Include(x => x.Department).Where(x => x.IsActive);
+        usersQuery = await _access.ScopeUsersAsync(usersQuery, departmentId, ct);
         if (userId is Guid filterUser) usersQuery = usersQuery.Where(x => x.Id == filterUser);
         var users = await usersQuery.OrderBy(x => x.Name).ToListAsync(ct);
         var userIds = users.Select(x => x.Id).ToList();
@@ -152,7 +157,7 @@ public class MonthlyWorkService : IMonthlyWorkService
     public async Task<MonthlyTaskDto> AddTaskAsync(Guid sheetId, SaveTaskRequest request, CancellationToken ct)
     {
         var sheet = await LoadEditableSheet(sheetId, ct);
-        await EnsureProjectAsync(request.ProjectId, ct);
+        await EnsureProjectAsync(request.ProjectId, sheet.UserId, ct);
         EnsureDatesInMonth(sheet, request);
 
         var now = DateTime.UtcNow;
@@ -185,7 +190,7 @@ public class MonthlyWorkService : IMonthlyWorkService
         var task = await _db.MonthlyTasks.Include(x => x.Sheet).FirstOrDefaultAsync(x => x.Id == taskId, ct)
             ?? throw new AppException("Monthly task was not found.", StatusCodes.Status404NotFound);
         EnsureUnlocked(task.Sheet);
-        await EnsureProjectAsync(request.ProjectId, ct);
+        await EnsureProjectAsync(request.ProjectId, task.Sheet.UserId, ct);
         EnsureDatesInMonth(task.Sheet, request);
 
         task.ProjectId = request.ProjectId;
@@ -223,6 +228,7 @@ public class MonthlyWorkService : IMonthlyWorkService
         _current.EnsureLead();
         var sheet = await _db.MonthlyWorkSheets.FirstOrDefaultAsync(x => x.Id == sheetId, ct)
             ?? throw new AppException("Monthly work sheet was not found.", StatusCodes.Status404NotFound);
+        await _access.EnsureCanManageUserAsync(sheet.UserId, ct);
 
         sheet.Status = locked ? SheetStatuses.Locked : SheetStatuses.Open;
         sheet.LockedAt = locked ? DateTime.UtcNow : null;
@@ -237,6 +243,7 @@ public class MonthlyWorkService : IMonthlyWorkService
     {
         var sheet = await _db.MonthlyWorkSheets.FirstOrDefaultAsync(x => x.Id == sheetId, ct)
             ?? throw new AppException("Monthly work sheet was not found.", StatusCodes.Status404NotFound);
+        await _access.EnsureSameDepartmentAsync(sheet.UserId, ct);
         EnsureUnlocked(sheet);
         return sheet;
     }
@@ -255,11 +262,14 @@ public class MonthlyWorkService : IMonthlyWorkService
             throw new AppException("Planned dates must fall within this work sheet's month.");
     }
 
-    private async Task EnsureProjectAsync(Guid? projectId, CancellationToken ct)
+    private async Task EnsureProjectAsync(Guid? projectId, Guid ownerId, CancellationToken ct)
     {
         if (projectId is null) return;
-        if (!await _db.Projects.AnyAsync(x => x.Id == projectId, ct))
-            throw new AppException("Project was not found.", StatusCodes.Status404NotFound);
+        var project = await _db.Projects.AsNoTracking().FirstOrDefaultAsync(x => x.Id == projectId, ct)
+            ?? throw new AppException("Project was not found.", StatusCodes.Status404NotFound);
+        var ownerDepartment = await _db.Users.AsNoTracking().Where(x => x.Id == ownerId).Select(x => x.DepartmentId).FirstOrDefaultAsync(ct);
+        if (project.DepartmentId != ownerDepartment)
+            throw new AppException("That project belongs to another department.");
     }
 
     private async Task<MonthlySheetDto> MapSheetAsync(MonthlyWorkSheet sheet, CancellationToken ct)

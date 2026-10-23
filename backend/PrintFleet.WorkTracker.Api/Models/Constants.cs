@@ -2,9 +2,11 @@ namespace PrintFleet.WorkTracker.Api.Models;
 
 public static class Roles
 {
+    public const string Admin = "Admin";
     public const string TeamLead = "TeamLead";
     public const string TeamMember = "TeamMember";
-    public static readonly string[] All = [TeamLead, TeamMember];
+    public const string Managers = "TeamLead,Admin";
+    public static readonly string[] All = [Admin, TeamLead, TeamMember];
 }
 
 public static class TaskStatuses
@@ -39,6 +41,13 @@ public static class SheetStatuses
 {
     public const string Open = "Open";
     public const string Locked = "Locked";
+}
+
+public static class DayTypes
+{
+    public const string Holiday = "Holiday";
+    public const string Leave = "Leave";
+    public static readonly string[] All = [Holiday, Leave];
 }
 
 public static class SubmissionStatuses
