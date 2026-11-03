@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PrintFleet.WorkTracker.Api.Authentication;
@@ -93,6 +94,7 @@ builder.Services.AddScoped<IInitiativeService, InitiativeService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IExportService, ExportService>();
+builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<GraphMailOptions>(builder.Configuration.GetSection("Email:Graph"));
 builder.Services.AddHttpClient("graph");
@@ -114,6 +116,14 @@ builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+var graphMailbox = app.Services.GetRequiredService<IGraphMailbox>();
+var mailOptions = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+if (graphMailbox.IsConfigured)
+    app.Logger.LogInformation("Outlook Graph is configured for {Sender}.", graphMailbox.Sender);
+else if (mailOptions.CanSend)
+    app.Logger.LogWarning("Outlook Graph is not configured ({Readiness}). Plan reminders will use SMTP. The API will keep running.", graphMailbox.Readiness);
+else
+    app.Logger.LogWarning("Outlook Graph is not configured ({Readiness}) and SMTP is not ready. Set Email:Graph or Email host, username, password, and FromAddress. The API will keep running.", graphMailbox.Readiness);
 app.UseMiddleware<ExceptionMiddleware>();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseCors("frontend");

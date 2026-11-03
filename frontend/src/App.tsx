@@ -36,6 +36,7 @@ const DepartmentsPage = lazy(() => import("./pages/DepartmentsPage").then((modul
 const OrganizationAccessPage = lazy(() => import("./pages/OrganizationAccessPage").then((module) => ({ default: module.OrganizationAccessPage })));
 const TeamTodayPage = lazy(() => import("./pages/TeamTodayPage").then((module) => ({ default: module.TeamTodayPage })));
 const ReminderSettingsPage = lazy(() => import("./pages/ReminderSettingsPage").then((module) => ({ default: module.ReminderSettingsPage })));
+const AttendancePage = lazy(() => import("./pages/AttendancePage").then((module) => ({ default: module.AttendancePage })));
 
 function RequireAuth() {
   const { user, loading } = useAuth();
@@ -112,6 +113,8 @@ export default function App() {
           <Route path="initiatives" element={<InitiativesPage />} />
           <Route path="reports/me" element={<ReportPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="attendance" element={<AttendancePage view="entry" />} />
+          <Route path="attendance/reports" element={<AttendancePage view="reports" />} />
           <Route path="my-team" element={<ManageTeamPage />} />
           <Route path="my-team/history" element={<TeamHistoryPage />} />
           <Route element={<RequireLead />}>
@@ -145,6 +148,8 @@ export default function App() {
             <Route path="team-today" element={<TeamTodayPage />} />
             <Route path="team-notices" element={<OrganizationTeamHistoryPage />} />
             <Route path="settings/reminders" element={<ReminderSettingsPage />} />
+            <Route path="attendance/holidays" element={<AttendancePage view="holidays" />} />
+            <Route path="attendance/settings" element={<AttendancePage view="settings" />} />
           </Route>
         </Route>
       </Route>

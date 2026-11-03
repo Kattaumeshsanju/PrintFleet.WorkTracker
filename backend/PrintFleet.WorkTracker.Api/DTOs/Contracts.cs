@@ -979,10 +979,19 @@ public class OrganizationPersonDto
     public bool StatusEditable { get; set; }
 }
 
+public class ReminderDepartmentDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Enabled { get; set; }
+    public int ActiveMembers { get; set; }
+}
+
 public class PlanReminderSettingsDto
 {
     public bool OutlookReady { get; set; }
     public string OutlookStatus { get; set; } = "";
+    public string MailTransport { get; set; } = "None";
     public string Sender { get; set; } = "";
     public bool Enabled { get; set; }
     public bool MissingPlanEnabled { get; set; }
@@ -995,6 +1004,7 @@ public class PlanReminderSettingsDto
     public DateTime? LastSuccessAt { get; set; }
     public DateTime? LastFailureAt { get; set; }
     public string? LastFailureDetail { get; set; }
+    public IReadOnlyList<ReminderDepartmentDto> Departments { get; set; } = [];
 }
 
 public class SavePlanReminderSettingsRequest
@@ -1005,6 +1015,7 @@ public class SavePlanReminderSettingsRequest
     public int Hour { get; set; } = 17;
     public int Minute { get; set; }
     public List<int> Weekdays { get; set; } = [];
+    public List<ReminderDepartmentDto> Departments { get; set; } = [];
 }
 
 public class PlanReminderPreviewDto

@@ -3,9 +3,11 @@ import type { FormEvent } from "react";
 import { Badge, Button, Field, Loading, PageHeader, Panel, inputClass, useToast } from "../components/ui";
 import { api, errorText } from "../services/api";
 
+type DepartmentChoice = { id: string; name: string; enabled: boolean; activeMembers: number };
 type Settings = {
   outlookReady: boolean;
   outlookStatus: string;
+  mailTransport: string;
   sender: string;
   enabled: boolean;
   missingPlanEnabled: boolean;
@@ -18,6 +20,7 @@ type Settings = {
   lastSuccessAt: string | null;
   lastFailureAt: string | null;
   lastFailureDetail: string | null;
+  departments: DepartmentChoice[];
 };
 
 type Preview = { subject: string; text: string; html: string; sample: boolean };
@@ -97,7 +100,7 @@ export function ReminderSettingsPage() {
     setBusy(true);
     try {
       await api("/api/plan-reminders/test", { method: "POST" });
-      toast("Microsoft Graph accepted the test email. That is not delivery confirmation.");
+      toast("The mail server accepted the test email. That is not delivery confirmation.");
       await load();
     } catch (err) {
       toast(errorText(err), "error");
@@ -111,9 +114,9 @@ export function ReminderSettingsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Email reminders" subtitle="Weekday monthly-plan reminders from the authorized Outlook mailbox. The existing 5:00 PM daily reminder is unchanged." />
+      <PageHeader title="Email reminders" subtitle="Weekday reminders from the authorized mailbox. Outlook is used when it is connected. Otherwise mail goes out by SMTP." />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Panel><div className="text-xs text-muted uppercase">Outlook</div><div className="mt-1"><Badge value={settings.outlookReady ? "Active" : "Pending"} /></div><div className="mt-2 text-sm text-muted">{settings.outlookStatus}</div></Panel>
+        <Panel><div className="text-xs text-muted uppercase">Mail</div><div className="mt-1"><Badge value={settings.mailTransport === "None" ? "Pending" : settings.mailTransport} /></div><div className="mt-2 text-sm text-muted">Outlook: {settings.outlookStatus}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">Sender</div><div className="mt-1 font-semibold">{settings.sender || "Not configured"}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">Recipients this run</div><div className="font-display text-2xl font-semibold">{settings.recipientCount}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">Schedule</div><div className="mt-1 font-semibold">{time} {settings.timeZone}</div></Panel>
@@ -132,6 +135,20 @@ export function ReminderSettingsPage() {
             </Field>
             <Field label="Timezone"><input className={inputClass} value={settings.timeZone} disabled /></Field>
           </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold">Daily 5:00 PM reminder departments</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {settings.departments.map((department) => (
+                <label key={department.id} className="flex items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" checked={department.enabled} onChange={() => setSettings({
+                    ...settings,
+                    departments: settings.departments.map((item) => item.id === department.id ? { ...item, enabled: !item.enabled } : item),
+                  })} />
+                  {department.name} <span className="font-normal text-muted">({department.activeMembers} active)</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             {days.map(([day, name]) => (
               <label key={name} className="flex items-center gap-2 rounded-full border border-line px-3 py-1 text-sm font-semibold">
@@ -142,9 +159,9 @@ export function ReminderSettingsPage() {
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={busy}>Save</Button>
             <Button type="button" variant="ghost" onClick={showPreview}>Preview template</Button>
-            <Button type="button" variant="secondary" disabled={busy} onClick={sendTest}>Send test to me</Button>
+            <Button type="button" variant="secondary" disabled={busy} onClick={sendTest}>Send test reminder to myself</Button>
           </div>
-          <p className="text-sm text-muted">Accepted by Microsoft Graph means the request was queued. It does not mean the recipient's mailbox has received it. Credentials stay on the server.</p>
+          <p className="text-sm text-muted">Accepted by Microsoft Graph or SMTP means the mail server queued the message. It does not mean the recipient's mailbox has received it. Credentials stay on the server. The daily reminder skips anyone who already submitted today, or who is marked Holiday or Leave.</p>
         </form>
       </Panel>
       <div className="grid gap-3 sm:grid-cols-2">

@@ -9,6 +9,9 @@ public static class WorkRecords
     public static Guid? ReportingDepartment(Guid? sheetDepartmentId, Guid? currentUserDepartmentId)
         => sheetDepartmentId ?? currentUserDepartmentId;
 
+    public static decimal OverviewActualHours(IEnumerable<int> calendarMinutes)
+        => WorkMetrics.Hours(calendarMinutes.Sum());
+
     public static bool IsDuplicateGoal(string title, Guid? projectId, IEnumerable<(string Title, Guid? ProjectId, string Status)> existing)
     {
         var key = title.Trim();

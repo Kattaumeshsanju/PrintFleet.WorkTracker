@@ -9,14 +9,16 @@ public class PlanReminderService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly IGraphMailbox _graph;
+    private readonly IEmailSender _mail;
     private readonly IOptions<EmailOptions> _email;
     private readonly ILogger<PlanReminderService> _logger;
     private DateOnly? _notReadyFor;
 
-    public PlanReminderService(IServiceScopeFactory scopes, IGraphMailbox graph, IOptions<EmailOptions> email, ILogger<PlanReminderService> logger)
+    public PlanReminderService(IServiceScopeFactory scopes, IGraphMailbox graph, IEmailSender mail, IOptions<EmailOptions> email, ILogger<PlanReminderService> logger)
     {
         _scopes = scopes;
         _graph = graph;
+        _mail = mail;
         _email = email;
         _logger = logger;
     }
@@ -51,15 +53,21 @@ public class PlanReminderService : BackgroundService
         var settings = await EnsureSettingsAsync(db, ct);
         if (!settings.Enabled || !PlanReminderRules.IsDue(local.DateTime, settings.Hour, settings.Minute, settings.Weekdays))
             return;
-        if (!_graph.IsConfigured)
+        var transport = PlanReminderRules.MailTransport(_graph.IsConfigured, _mail.CanSend);
+        if (transport is null)
         {
             var today = DateOnly.FromDateTime(local.Date);
             if (_notReadyFor != today)
             {
                 _notReadyFor = today;
-                _logger.LogWarning("Monthly plan reminder is due, but Outlook Graph is not ready ({Readiness}). No plan emails were sent.", _graph.Readiness);
+                _logger.LogWarning("Monthly plan reminder is due, but neither Outlook Graph ({Readiness}) nor SMTP is configured. No plan emails were sent.", _graph.Readiness);
             }
             return;
+        }
+        if (transport == "Smtp" && _notReadyFor != DateOnly.FromDateTime(local.Date))
+        {
+            _notReadyFor = DateOnly.FromDateTime(local.Date);
+            _logger.LogWarning("Outlook Graph is not ready ({Readiness}). Monthly plan reminders will be sent by SMTP.", _graph.Readiness);
         }
 
         var scheduled = DateOnly.FromDateTime(local.Date);
@@ -106,7 +114,7 @@ public class PlanReminderService : BackgroundService
         var failed = 0;
         foreach (var message in pending)
         {
-            var outcome = await SendOneAsync(db, run.Id, scheduled, message, ct);
+            var outcome = await SendOneAsync(db, run.Id, scheduled, message, transport, ct);
             if (outcome == PlanReminderStatuses.Accepted) accepted++;
             else if (outcome == PlanReminderStatuses.Failed) failed++;
         }
@@ -140,7 +148,7 @@ public class PlanReminderService : BackgroundService
         return settings;
     }
 
-    private async Task<string?> SendOneAsync(AppDbContext db, Guid runId, DateOnly scheduled, PlanOutgoing message, CancellationToken ct)
+    private async Task<string?> SendOneAsync(AppDbContext db, Guid runId, DateOnly scheduled, PlanOutgoing message, string transport, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var key = PlanReminderRules.Key(scheduled, message.MessageType, message.UserId, scheduled.Year, scheduled.Month);
@@ -190,19 +198,11 @@ public class PlanReminderService : BackgroundService
                 .SetProperty(item => item.LastAttemptAt, now)
                 .SetProperty(item => item.UpdatedAt, now)
                 .SetProperty(item => item.Subject, message.Message.Subject)
-                .SetProperty(item => item.RecipientEmail, message.Email), ct);
+                .SetProperty(item => item.RecipientEmail, message.Email)
+                .SetProperty(item => item.Transport, transport), ct);
         if (claimed != 1) return null;
 
-        GraphSendResult result;
-        try
-        {
-            result = await _graph.SendAsync(message.Email, message.Message.Subject, message.Message.Text, message.Message.Html, null, null, ct);
-        }
-        catch (Exception ex)
-        {
-            result = new GraphSendResult(false, true, 0, ex.GetType().Name);
-            _logger.LogWarning("Plan reminder send failed before Graph accepted it. {ErrorType}", ex.GetType().Name);
-        }
+        var result = await SendMessageAsync(message.Email, message.Message.Subject, message.Message.Text, message.Message.Html, transport, ct);
 
         var retryable = !result.Accepted && result.Transient && attempts + 1 < PlanReminderRules.MaxAttempts;
         var status = result.Accepted ? PlanReminderStatuses.Accepted : PlanReminderStatuses.Failed;
@@ -216,6 +216,37 @@ public class PlanReminderService : BackgroundService
         return status;
     }
 
+    private async Task<GraphSendResult> SendMessageAsync(string to, string subject, string? text, string? html, string transport, CancellationToken ct)
+    {
+        if (transport == "Graph")
+        {
+            try
+            {
+                return await _graph.SendAsync(to, subject, text, html, null, null, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Plan reminder send failed before Microsoft Graph accepted it. {ErrorType}", ex.GetType().Name);
+                return new GraphSendResult(false, true, 0, ex.GetType().Name);
+            }
+        }
+
+        try
+        {
+            await _mail.SendRichAsync(to, subject, text ?? "", html ?? text ?? "", null, null, ct);
+            return new GraphSendResult(true, false, 250, null);
+        }
+        catch (GraphMailException ex)
+        {
+            return new GraphSendResult(false, ex.Transient, ex.StatusCode, ex.ErrorType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Plan reminder SMTP send failed. {ErrorType}", ex.GetType().Name);
+            return new GraphSendResult(false, true, 0, ex.GetType().Name);
+        }
+    }
+
     private static string? Trim(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "GraphRejected" : value.Length <= 200 ? value : value[..200];
+        => string.IsNullOrWhiteSpace(value) ? "MailRejected" : value.Length <= 200 ? value : value[..200];
 }

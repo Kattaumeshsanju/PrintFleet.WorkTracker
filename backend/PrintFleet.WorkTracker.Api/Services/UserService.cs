@@ -210,7 +210,7 @@ public class UserService : IUserService
             Cancelled = counts.Cancelled,
             Planned = counts.Planned,
             PlannedHours = counts.PlannedHours,
-            ActualHours = seeDaily ? (sheet?.ActualHours ?? 0) : 0,
+            ActualHours = WorkRecords.OverviewActualHours(calendar.Days.Select(day => day.Minutes)),
             CompletionPercent = counts.Completion,
             Tasks = tasks,
             RecentEntries = entries.Select(DailyWorkService.MapEntry).ToList(),

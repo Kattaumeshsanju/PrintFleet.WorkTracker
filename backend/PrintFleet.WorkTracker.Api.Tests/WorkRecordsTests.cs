@@ -11,6 +11,17 @@ namespace PrintFleet.WorkTracker.Api.Tests;
 public class WorkRecordsTests
 {
     [Fact]
+    public void A_team_lead_sees_calendar_hour_totals_and_not_another_persons_daily_text()
+    {
+        var lead = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        Assert.False(DepartmentRules.CanViewDaily(lead, Roles.TeamLead, member));
+        Assert.True(DepartmentRules.CanViewDaily(member, Roles.TeamMember, member));
+        Assert.Equal(9m, WorkRecords.OverviewActualHours([300, 240]));
+        Assert.Equal(0m, WorkRecords.OverviewActualHours([]));
+    }
+
+    [Fact]
     public void A_sheet_keeps_the_department_it_was_opened_in()
     {
         var machine = Guid.Parse("20000000-0000-0000-0000-000000000001");

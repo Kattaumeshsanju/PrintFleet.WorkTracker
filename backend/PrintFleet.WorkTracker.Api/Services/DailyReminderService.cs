@@ -58,40 +58,33 @@ public class DailyReminderService : BackgroundService
             .Where(x => x.Action == "Reminder" && x.EntityType == "DailyReminder" && x.Details != null && x.Details.StartsWith(marker))
             .OrderByDescending(x => x.Id)
             .FirstOrDefaultAsync(ct);
-        var retryOnly = prior is null ? null : ReminderLedger.FailedAddresses(prior.Details);
-        if (prior is not null && retryOnly!.Count == 0) return;
-
-        if (!options.IsConfigured)
+        if (!_email.CanSend)
         {
             if (_configWarningFor != today)
             {
                 _configWarningFor = today;
-                _logger.LogWarning("Daily reminder is due, but email is not configured. Set Email:Host, Username, Password, and FromAddress.");
+                _logger.LogWarning("Daily reminder is due, but mail is not configured. Set Outlook Graph or Email host, username, password, and FromAddress.");
             }
             return;
         }
 
-        var recipients = (retryOnly ?? options.Recipients)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
         var users = await db.Users.AsNoTracking()
-            .Where(x => x.IsActive)
-            .Select(x => new { x.Id, x.Email, x.Name })
+            .Where(x => x.DepartmentId != null)
+            .Select(x => new { x.Id, x.Email, x.Name, x.Role, x.IsActive, DepartmentActive = x.Department!.IsActive, x.Department!.DailyReminderEnabled })
             .ToListAsync(ct);
-        var byEmail = users.ToDictionary(x => x.Email, x => x, StringComparer.OrdinalIgnoreCase);
-        var away = await db.DailySubmissions.AsNoTracking()
-            .Where(x => x.WorkDate == today && x.DayType != null)
-            .Select(x => x.UserId)
+        var submissions = await db.DailySubmissions.AsNoTracking()
+            .Where(x => x.WorkDate == today)
+            .Select(x => new { x.UserId, x.Status, x.DayType })
             .ToListAsync(ct);
-        var awayIds = away.ToHashSet();
-        var submitted = await db.DailySubmissions.AsNoTracking()
-            .Where(x => x.WorkDate == today && x.Status == SubmissionStatuses.Submitted)
-            .Select(x => x.UserId)
-            .ToListAsync(ct);
-        var submittedIds = submitted.ToHashSet();
-        var userIds = users.Select(x => x.Id).ToArray();
+        var submissionByUser = submissions.ToDictionary(x => x.UserId);
+        var selected = DailyReminderRules.Select(
+            users.Select(x => new DailyReminderCandidate(x.Id, x.Email, x.Role, x.IsActive, x.DepartmentActive, x.DailyReminderEnabled)),
+            id => submissionByUser.TryGetValue(id, out var row) ? row.Status : null,
+            id => submissionByUser.TryGetValue(id, out var row) ? row.DayType : null);
+        if (selected.Count == 0) return;
+        var selectedIds = selected.Select(x => x.UserId).ToHashSet();
+        var names = users.ToDictionary(x => x.Id, x => x.Name);
+        var userIds = selectedIds.ToArray();
         var taskRows = await db.MonthlyTasks.AsNoTracking()
             .Where(x => x.Sheet.Year == today.Year && x.Sheet.Month == today.Month && userIds.Contains(x.Sheet.UserId)
                 && (x.Status == TaskStatuses.Planned || x.Status == TaskStatuses.InProgress || x.Status == TaskStatuses.Blocked))
@@ -111,58 +104,99 @@ public class DailyReminderService : BackgroundService
             .GroupBy(x => x.UserId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Start).ThenBy(x => x.Title).ToList());
 
-        var sent = new List<string>();
-        var skipped = new List<string>();
-        var failed = new List<string>();
+        var sent = 0;
+        var failed = 0;
         var site = options.SiteUrl.TrimEnd('/');
         var dailyLink = string.IsNullOrWhiteSpace(site) ? "" : $"{site}/daily";
         var planLink = string.IsNullOrWhiteSpace(site) ? "" : $"{site}/monthly-plan";
-
-        foreach (var address in recipients)
+        var existing = await db.EmailDeliveries
+            .Where(x => x.Kind == EmailDeliveryKinds.DailyReminder && x.WorkDate == today && x.UserId != null && selectedIds.Contains(x.UserId.Value))
+            .ToListAsync(ct);
+        var deliveryByUser = existing.ToDictionary(x => x.UserId!.Value);
+        var pendingPeople = selected.Where(person =>
         {
-            byEmail.TryGetValue(address, out var user);
-            if (user is not null && awayIds.Contains(user.Id))
-            {
-                skipped.Add(address);
+            if (!deliveryByUser.TryGetValue(person.UserId, out var row)) return true;
+            if (row.Status == EmailDeliveryStatuses.SentToProvider) return false;
+            return row.Status == EmailDeliveryStatuses.Pending || TeamNoticeRules.CanRetry(row.Status, row.Attempts, row.ErrorType);
+        }).ToList();
+        if (pendingPeople.Count == 0) return;
+
+        foreach (var person in pendingPeople)
+        {
+            deliveryByUser.TryGetValue(person.UserId, out var delivery);
+            if (delivery?.Status == EmailDeliveryStatuses.SentToProvider) continue;
+            if (delivery is not null && delivery.Status != EmailDeliveryStatuses.Pending && !TeamNoticeRules.CanRetry(delivery.Status, delivery.Attempts, delivery.ErrorType))
                 continue;
+
+            names.TryGetValue(person.UserId, out var name);
+            tasksByUser.TryGetValue(person.UserId, out var ownTasks);
+            var subject = $"Your tasks for {today:dd MMM yyyy}";
+            var body = BuildBody(name ?? person.Email, today, true, false, ownTasks ?? [], dailyLink, planLink);
+            var now = DateTime.UtcNow;
+            if (delivery is null)
+            {
+                delivery = new EmailDelivery
+                {
+                    Id = Guid.NewGuid(),
+                    Kind = EmailDeliveryKinds.DailyReminder,
+                    UserId = person.UserId,
+                    RecipientEmail = person.Email.Trim(),
+                    Subject = subject,
+                    WorkDate = today,
+                    Status = EmailDeliveryStatuses.Pending,
+                    Attempts = 0,
+                    UpdatedAt = now
+                };
+                db.EmailDeliveries.Add(delivery);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    db.Entry(delivery).State = EntityState.Detached;
+                    continue;
+                }
             }
 
-            var name = user?.Name ?? address;
-            tasksByUser.TryGetValue(user?.Id ?? Guid.Empty, out var ownTasks);
-            var body = BuildBody(name, today, user is not null, submittedIds.Contains(user?.Id ?? Guid.Empty), ownTasks ?? [], dailyLink, planLink);
-
+            delivery.Subject = subject;
+            delivery.RecipientEmail = person.Email.Trim();
+            delivery.UpdatedAt = now;
+            var accepted = false;
+            string? errorType = null;
+            var permanent = false;
             try
             {
-                await _email.SendAsync(address, $"Your tasks for {today:dd MMM yyyy}", body, ct);
-                sent.Add(address);
+                await _email.SendAsync(person.Email.Trim(), subject, body, ct);
+                accepted = true;
+                sent++;
             }
             catch (Exception ex)
             {
-                failed.Add(address);
-                _logger.LogError("Could not send the daily reminder to {Address}. {ErrorType}", address, ex.GetType().Name);
+                failed++;
+                var graph = ex as GraphMailException;
+                permanent = graph is not null && !graph.Transient;
+                errorType = graph?.ErrorType ?? ex.GetType().Name;
+                _logger.LogError("Could not send the daily reminder to {Address}. {ErrorType}", person.Email, errorType);
             }
+
+            TeamNoticeRules.RecordAttempt(delivery, accepted, errorType, permanent, DateTime.UtcNow);
+            await db.SaveChangesAsync(ct);
         }
 
-        if (sent.Count == 0 && failed.Count > 0 && prior is null) return;
-
-        var details = ReminderLedger.Describe(today, sent.Count, skipped.Count, failed);
-        if (prior is null)
+        if (prior is null && (sent > 0 || failed > 0))
         {
             db.AuditLogs.Add(new AuditLog
             {
                 Action = "Reminder",
                 EntityType = "DailyReminder",
                 UserName = "WorkTracker",
-                Details = details,
+                Details = ReminderLedger.Describe(today, sent, users.Count - selected.Count, []),
                 CreatedAt = DateTime.UtcNow
             });
+            await db.SaveChangesAsync(ct);
         }
-        else
-        {
-            prior.Details = details;
-        }
-        await db.SaveChangesAsync(ct);
-        _logger.LogInformation("Daily reminder for {Date}: sent {Sent}, skipped {Skipped}, failed {Failed}", marker, sent.Count, skipped.Count, failed.Count);
+        _logger.LogInformation("Daily reminder for {Date}: accepted {Sent}, failed {Failed}", marker, sent, failed);
     }
 
     private sealed record TaskLine(Guid UserId, string Title, string? Project, string Status, string Priority, DateOnly Start, DateOnly End);

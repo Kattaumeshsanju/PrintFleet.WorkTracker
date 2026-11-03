@@ -292,6 +292,7 @@ public class TeamLeadService : ITeamLeadService
                 row.Delivery = new EmailDelivery
                 {
                     Id = Guid.NewGuid(),
+                    Kind = EmailDeliveryKinds.TeamNotice,
                     RecipientId = row.Id,
                     Status = EmailDeliveryStatuses.Pending,
                     NextAttemptAt = now,
@@ -357,7 +358,7 @@ public class TeamLeadService : ITeamLeadService
         var now = DateTime.UtcNow;
         var due = await _db.EmailDeliveries
             .Include(x => x.Recipient).ThenInclude(x => x.Notice).ThenInclude(x => x.Sender)
-            .Where(x => x.Status == EmailDeliveryStatuses.Pending && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+            .Where(x => x.Kind == EmailDeliveryKinds.TeamNotice && x.RecipientId != null && x.Status == EmailDeliveryStatuses.Pending && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
             .OrderBy(x => x.UpdatedAt)
             .Take(20)
             .ToListAsync(ct);
@@ -366,6 +367,7 @@ public class TeamLeadService : ITeamLeadService
         {
             if (delivery.Status == EmailDeliveryStatuses.SentToProvider) continue;
             var recipient = delivery.Recipient;
+            if (recipient is null) continue;
             var notice = recipient.Notice;
             var text = $"{notice.Body}\n\n{notice.Sender.Name} sent this to your team in WorkTracker.";
             try

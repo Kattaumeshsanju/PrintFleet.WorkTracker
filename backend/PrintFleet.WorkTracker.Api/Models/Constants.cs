@@ -132,6 +132,12 @@ public static class NoticeChannels
     public static readonly string[] All = [Email, InApp, Both];
 }
 
+public static class EmailDeliveryKinds
+{
+    public const string TeamNotice = "TeamNotice";
+    public const string DailyReminder = "DailyReminder";
+}
+
 public static class EmailDeliveryStatuses
 {
     public const string Pending = "Pending";
@@ -161,6 +167,36 @@ public static class PlanReminderRunStatuses
     public const string Running = "Running";
     public const string Completed = "Completed";
     public const string Failed = "Failed";
+}
+
+public static class AttendanceStatuses
+{
+    public const string Present = "Present";
+    public const string Leave = "Leave";
+    public const string CompOff = "CompOff";
+    public const string Od = "OD";
+    public const string Absent = "Absent";
+    public const string WeeklyOff = "WeeklyOff";
+    public const string Holiday = "Holiday";
+    public static readonly string[] All = [Present, Leave, CompOff, Od, Absent, WeeklyOff, Holiday];
+    public static readonly string[] Ranges = [Leave, CompOff, Od];
+}
+
+public static class AttendanceRegisterStatuses
+{
+    public const string Draft = "Draft";
+    public const string Submitted = "Submitted";
+    public const string Approved = "Approved";
+    public static readonly string[] All = [Draft, Submitted, Approved];
+}
+
+public static class AlternateSaturdayRules
+{
+    public const string None = "None";
+    public const string AllOff = "AllOff";
+    public const string SecondAndFourth = "SecondAndFourth";
+    public const string FirstAndThird = "FirstAndThird";
+    public static readonly string[] All = [None, AllOff, SecondAndFourth, FirstAndThird];
 }
 
 public static class AuditActions

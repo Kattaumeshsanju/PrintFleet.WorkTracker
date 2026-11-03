@@ -5,6 +5,7 @@ public class Department
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public bool DailyReminderEnabled { get; set; } = true;
     public DateTime CreatedAt { get; set; }
 
     public ICollection<User> Users { get; set; } = new List<User>();
@@ -21,6 +22,7 @@ public class User
     public string PasswordHash { get; set; } = "";
     public string Role { get; set; } = Roles.TeamMember;
     public string? JobTitle { get; set; }
+    public string? EmployeeNumber { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
 
@@ -312,8 +314,13 @@ public class TeamNoticeRecipient
 public class EmailDelivery
 {
     public Guid Id { get; set; }
-    public Guid RecipientId { get; set; }
-    public TeamNoticeRecipient Recipient { get; set; } = null!;
+    public string Kind { get; set; } = EmailDeliveryKinds.TeamNotice;
+    public Guid? RecipientId { get; set; }
+    public TeamNoticeRecipient? Recipient { get; set; }
+    public Guid? UserId { get; set; }
+    public string? RecipientEmail { get; set; }
+    public string? Subject { get; set; }
+    public DateOnly? WorkDate { get; set; }
     public string Status { get; set; } = EmailDeliveryStatuses.Pending;
     public int Attempts { get; set; }
     public string? ErrorType { get; set; }
@@ -358,6 +365,7 @@ public class PlanReminderDelivery
     public int Month { get; set; }
     public string Subject { get; set; } = "";
     public string MessageType { get; set; } = PlanReminderTypes.PersonalPlan;
+    public string? Transport { get; set; }
     public int Attempts { get; set; }
     public string Status { get; set; } = PlanReminderStatuses.Pending;
     public bool Retryable { get; set; }
@@ -367,6 +375,99 @@ public class PlanReminderDelivery
     public string IdempotencyKey { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class DepartmentWorkCalendar
+{
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = null!;
+    public string WeeklyOffs { get; set; } = "0";
+    public string AlternateSaturday { get; set; } = AlternateSaturdayRules.SecondAndFourth;
+}
+
+public class CompanyHoliday
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public DateOnly HolidayDate { get; set; }
+    public string HolidayType { get; set; } = "Company";
+    public Guid? DepartmentId { get; set; }
+}
+
+public class AttendanceDay
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public Guid DepartmentId { get; set; }
+    public DateOnly AttendanceDate { get; set; }
+    public string Status { get; set; } = AttendanceStatuses.Present;
+    public string? Remarks { get; set; }
+    public string? LeaveType { get; set; }
+    public DateOnly? EarnedDate { get; set; }
+    public Guid? SpanId { get; set; }
+    public Guid RecordedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class AttendanceSpan
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public Guid DepartmentId { get; set; }
+    public string Kind { get; set; } = AttendanceStatuses.Leave;
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public string? LeaveType { get; set; }
+    public DateOnly? EarnedDate { get; set; }
+    public string? Remarks { get; set; }
+    public Guid CreatedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MonthlyAttendanceRegister
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Status { get; set; } = AttendanceRegisterStatuses.Draft;
+    public Guid? SubmittedById { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public Guid? ReviewedById { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewReason { get; set; }
+    public DateOnly PreparedOn { get; set; }
+}
+
+public class AttendanceChange
+{
+    public Guid Id { get; set; }
+    public Guid? AttendanceDayId { get; set; }
+    public Guid? RegisterId { get; set; }
+    public Guid UserId { get; set; }
+    public string Action { get; set; } = "";
+    public string? PreviousValue { get; set; }
+    public string? NewValue { get; set; }
+    public Guid ChangedById { get; set; }
+    public string? Reason { get; set; }
+    public DateTime ChangedAt { get; set; }
+}
+
+public class AttendanceCorrection
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public Guid DepartmentId { get; set; }
+    public DateOnly AttendanceDate { get; set; }
+    public string RequestedStatus { get; set; } = AttendanceStatuses.Present;
+    public string Reason { get; set; } = "";
+    public string Status { get; set; } = "Pending";
+    public Guid? DecidedById { get; set; }
+    public string? DecisionReason { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class AuditLog

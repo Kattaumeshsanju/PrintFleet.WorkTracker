@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Building2, CalendarClock, ChartColumn, ClipboardList, FlaskConical, FolderKanban, Landmark, LayoutDashboard, Mail, Settings, Shield, Users } from "lucide-react";
+import { AlertTriangle, Building2, CalendarCheck, CalendarClock, ChartColumn, ClipboardList, FlaskConical, FolderKanban, Landmark, LayoutDashboard, Mail, Settings, Shield, Users } from "lucide-react";
 import type { Role } from "../types";
 import { hasOverview, hasReports } from "../utils/format";
 
@@ -34,6 +34,7 @@ const navigation: NavSection[] = [
       { to: "/daily", label: "My Daily Work", icon: CalendarClock, roles: ["Admin", "TeamLead", "TeamMember"] },
       { to: "/monthly-plan", label: "My Monthly Plan", icon: ClipboardList, roles: ["Admin", "TeamLead", "TeamMember"] },
       { to: "/reports/me", label: "My Reports", icon: ChartColumn, end: true, roles: ["Admin", "TeamLead", "TeamMember"] },
+      { to: "/attendance", label: "My Attendance", icon: CalendarCheck, end: true, roles: ["TeamMember"] },
     ],
   },
   {
@@ -51,6 +52,8 @@ const navigation: NavSection[] = [
       { to: "/projects", label: "Department Projects", icon: FolderKanban, roles: ["TeamLead"] },
       { to: "/projects", label: "Projects", icon: FolderKanban, roles: ["Admin"] },
       { to: "/initiatives", label: "Initiatives", icon: FlaskConical, roles: ["Admin", "TeamLead", "TeamMember"] },
+      { to: "/attendance", label: "My Team Attendance", icon: CalendarCheck, end: true, roles: ["TeamLead"] },
+      { to: "/attendance/reports", label: "Attendance Reports", icon: ChartColumn, end: true, roles: ["TeamLead"] },
       { to: "/reports/team", label: "Department Reports", icon: ChartColumn, end: true, roles: ["TeamLead"] },
     ],
   },
@@ -67,6 +70,12 @@ const navigation: NavSection[] = [
       { to: "/reports/team", label: "Organization Reports", icon: ChartColumn, end: true, roles: ["Admin"] },
       { to: "/executive/reports", label: "Organization Reports", icon: ChartColumn, roles: ["CEO"], allow: (access) => hasReports(access) && access.role !== "Admin" },
       { to: "/executive/risks", label: "Risks and Delays", icon: AlertTriangle, roles: ["Admin", "CEO"], allow: hasOverview },
+      { to: "/attendance", label: "Organization Attendance", icon: CalendarCheck, end: true, roles: ["Admin"] },
+      { to: "/attendance/reports", label: "Attendance Reports", icon: ChartColumn, end: true, roles: ["Admin"] },
+      { to: "/attendance/holidays", label: "Holiday Calendar", icon: CalendarClock, roles: ["Admin"] },
+      { to: "/attendance/settings", label: "Attendance Settings", icon: Settings, roles: ["Admin"] },
+      { to: "/attendance", label: "Organization Attendance Overview", icon: CalendarCheck, end: true, roles: ["CEO"], allow: (access) => hasOverview(access) && access.role !== "Admin" },
+      { to: "/attendance/reports", label: "Department Attendance Reports", icon: ChartColumn, end: true, roles: ["CEO"], allow: (access) => hasOverview(access) && access.role !== "Admin" },
       { to: "/executive/research", label: "Research Portfolio", icon: FlaskConical, roles: ["Admin", "CEO"] },
     ],
   },

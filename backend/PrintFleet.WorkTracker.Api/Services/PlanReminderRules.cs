@@ -79,6 +79,12 @@ public static class PlanReminderRules
     public static string FormatWeekdays(IEnumerable<int> days)
         => string.Join(",", days.Where(day => day is >= 0 and <= 6).Distinct().Order());
 
+    public static string? MailTransport(bool graphReady, bool smtpReady)
+        => graphReady ? "Graph" : smtpReady ? "Smtp" : null;
+
+    public static string AcceptanceLabel(string? transport)
+        => transport == "Smtp" ? "Accepted by SMTP" : "Accepted by Microsoft Graph";
+
     public static string Key(DateOnly day, string messageType, Guid userId, int year, int month)
         => $"{day:yyyy-MM-dd}|{messageType}|{userId:N}|{year:D4}{month:D2}";
 

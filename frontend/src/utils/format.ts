@@ -25,6 +25,14 @@ const LABELS: Record<string, string> = {
   Blocker: "Blocker",
   Email: "Email",
   Both: "Email and in-app",
+  CompOff: "Compensatory Off",
+  OD: "Outstation Duty",
+  WeeklyOff: "Weekly Off",
+  NotMarked: "Not Marked",
+  SecondAndFourth: "2nd and 4th Saturday off",
+  FirstAndThird: "1st and 3rd Saturday off",
+  AllOff: "Every Saturday off",
+  None: "No extra Saturday off",
 };
 
 export function goalCompletion(percent: number, counted: number) {

@@ -32,6 +32,13 @@ public class AppDbContext : DbContext
     public DbSet<ResearchRecord> ResearchRecords => Set<ResearchRecord>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<CeoInvitation> CeoInvitations => Set<CeoInvitation>();
+    public DbSet<DepartmentWorkCalendar> DepartmentWorkCalendars => Set<DepartmentWorkCalendar>();
+    public DbSet<CompanyHoliday> CompanyHolidays => Set<CompanyHoliday>();
+    public DbSet<AttendanceDay> AttendanceDays => Set<AttendanceDay>();
+    public DbSet<AttendanceSpan> AttendanceSpans => Set<AttendanceSpan>();
+    public DbSet<MonthlyAttendanceRegister> MonthlyAttendanceRegisters => Set<MonthlyAttendanceRegister>();
+    public DbSet<AttendanceChange> AttendanceChanges => Set<AttendanceChange>();
+    public DbSet<AttendanceCorrection> AttendanceCorrections => Set<AttendanceCorrection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -218,10 +225,14 @@ public class AppDbContext : DbContext
 
         var delivery = modelBuilder.Entity<EmailDelivery>();
         delivery.HasIndex(x => x.RecipientId).IsUnique();
+        delivery.HasIndex(x => new { x.Kind, x.UserId, x.WorkDate }).IsUnique().HasFilter("\"Kind\" = 'DailyReminder'");
         delivery.HasIndex(x => new { x.Status, x.NextAttemptAt });
+        delivery.Property(x => x.Kind).HasMaxLength(40).IsRequired();
+        delivery.Property(x => x.RecipientEmail).HasMaxLength(200);
+        delivery.Property(x => x.Subject).HasMaxLength(200);
         delivery.Property(x => x.Status).HasMaxLength(30).IsRequired();
         delivery.Property(x => x.ErrorType).HasMaxLength(80);
-        delivery.HasOne(x => x.Recipient).WithOne(x => x.Delivery).HasForeignKey<EmailDelivery>(x => x.RecipientId).OnDelete(DeleteBehavior.Cascade);
+        delivery.HasOne(x => x.Recipient).WithOne(x => x.Delivery).HasForeignKey<EmailDelivery>(x => x.RecipientId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
 
         var audit = modelBuilder.Entity<AuditLog>();
         audit.HasIndex(x => x.CreatedAt);
@@ -246,8 +257,55 @@ public class AppDbContext : DbContext
         planDelivery.Property(x => x.RecipientEmail).HasMaxLength(200).IsRequired();
         planDelivery.Property(x => x.Subject).HasMaxLength(200).IsRequired();
         planDelivery.Property(x => x.MessageType).HasMaxLength(40).IsRequired();
+        planDelivery.Property(x => x.Transport).HasMaxLength(20);
         planDelivery.Property(x => x.Status).HasMaxLength(20).IsRequired();
         planDelivery.Property(x => x.FailureDetail).HasMaxLength(200);
         planDelivery.Property(x => x.IdempotencyKey).HasMaxLength(120).IsRequired();
+
+        var employee = modelBuilder.Entity<User>();
+        employee.Property(x => x.EmployeeNumber).HasMaxLength(40);
+        employee.HasIndex(x => x.EmployeeNumber).IsUnique().HasFilter("\"EmployeeNumber\" IS NOT NULL");
+
+        var calendar = modelBuilder.Entity<DepartmentWorkCalendar>();
+        calendar.HasKey(x => x.DepartmentId);
+        calendar.Property(x => x.WeeklyOffs).HasMaxLength(20).IsRequired();
+        calendar.Property(x => x.AlternateSaturday).HasMaxLength(30).IsRequired();
+        calendar.HasOne(x => x.Department).WithOne().HasForeignKey<DepartmentWorkCalendar>(x => x.DepartmentId);
+
+        var holiday = modelBuilder.Entity<CompanyHoliday>();
+        holiday.Property(x => x.Name).HasMaxLength(120).IsRequired();
+        holiday.Property(x => x.HolidayType).HasMaxLength(40).IsRequired();
+        holiday.HasIndex(x => x.HolidayDate);
+
+        var day = modelBuilder.Entity<AttendanceDay>();
+        day.HasIndex(x => new { x.UserId, x.AttendanceDate }).IsUnique();
+        day.HasIndex(x => new { x.DepartmentId, x.AttendanceDate });
+        day.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        day.Property(x => x.Remarks).HasMaxLength(500);
+        day.Property(x => x.LeaveType).HasMaxLength(40);
+        day.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        var span = modelBuilder.Entity<AttendanceSpan>();
+        span.Property(x => x.Kind).HasMaxLength(20).IsRequired();
+        span.Property(x => x.Remarks).HasMaxLength(500);
+        span.HasIndex(x => new { x.UserId, x.StartDate, x.EndDate });
+
+        var register = modelBuilder.Entity<MonthlyAttendanceRegister>();
+        register.HasIndex(x => new { x.DepartmentId, x.Year, x.Month }).IsUnique();
+        register.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        register.Property(x => x.ReviewReason).HasMaxLength(500);
+
+        var change = modelBuilder.Entity<AttendanceChange>();
+        change.Property(x => x.Action).HasMaxLength(40).IsRequired();
+        change.Property(x => x.PreviousValue).HasMaxLength(200);
+        change.Property(x => x.NewValue).HasMaxLength(200);
+        change.Property(x => x.Reason).HasMaxLength(500);
+        change.HasIndex(x => x.ChangedAt);
+
+        var correction = modelBuilder.Entity<AttendanceCorrection>();
+        correction.Property(x => x.RequestedStatus).HasMaxLength(20).IsRequired();
+        correction.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        correction.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        correction.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
