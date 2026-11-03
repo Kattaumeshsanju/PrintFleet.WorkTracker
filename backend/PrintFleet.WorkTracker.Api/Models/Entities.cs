@@ -4,6 +4,7 @@ public class Department
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
 
     public ICollection<User> Users { get; set; } = new List<User>();
@@ -26,6 +27,16 @@ public class User
     public ICollection<MonthlyWorkSheet> Sheets { get; set; } = new List<MonthlyWorkSheet>();
     public ICollection<DailyWorkEntry> DailyEntries { get; set; } = new List<DailyWorkEntry>();
     public ICollection<DailySubmission> Submissions { get; set; } = new List<DailySubmission>();
+    public ICollection<UserPermission> Permissions { get; set; } = new List<UserPermission>();
+}
+
+public class UserPermission
+{
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public string Permission { get; set; } = "";
+    public Guid GrantedById { get; set; }
+    public DateTime GrantedAt { get; set; }
 }
 
 public class Project
@@ -33,16 +44,38 @@ public class Project
     public Guid Id { get; set; }
     public Guid? DepartmentId { get; set; }
     public Department? Department { get; set; }
+    public Guid? OwnerId { get; set; }
+    public User? Owner { get; set; }
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";
+    public string Priority { get; set; } = Priorities.Medium;
     public string? Description { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string Status { get; set; } = ProjectStatuses.Active;
+    public Guid? WorkCategoryId { get; set; }
+    public WorkCategory? WorkCategory { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<MonthlyTask> Tasks { get; set; } = new List<MonthlyTask>();
+}
+
+public class DepartmentMonthlyPlan
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = null!;
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Status { get; set; } = DepartmentPlanStatuses.Open;
+    public string? Summary { get; set; }
+    public string? Risks { get; set; }
+    public string? Comments { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
+    public ICollection<MonthlyWorkSheet> Sheets { get; set; } = new List<MonthlyWorkSheet>();
 }
 
 public class MonthlyWorkSheet
@@ -50,6 +83,10 @@ public class MonthlyWorkSheet
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
+    public Guid? DepartmentPlanId { get; set; }
+    public DepartmentMonthlyPlan? DepartmentPlan { get; set; }
     public int Year { get; set; }
     public int Month { get; set; }
     public string Status { get; set; } = SheetStatuses.Open;
@@ -68,12 +105,19 @@ public class MonthlyTask
     public MonthlyWorkSheet Sheet { get; set; } = null!;
     public Guid? ProjectId { get; set; }
     public Project? Project { get; set; }
+    public Guid? WorkCategoryId { get; set; }
+    public WorkCategory? WorkCategory { get; set; }
+    public Guid? InitiativeId { get; set; }
+    public Initiative? Initiative { get; set; }
     public string Title { get; set; } = "";
     public string? Description { get; set; }
     public string Priority { get; set; } = Priorities.Medium;
     public DateOnly PlannedStartDate { get; set; }
     public DateOnly PlannedEndDate { get; set; }
+    public DateOnly? ActualStartDate { get; set; }
+    public DateOnly? ActualEndDate { get; set; }
     public decimal EstimatedHours { get; set; }
+    public int ProgressPercent { get; set; }
     public string Status { get; set; } = TaskStatuses.Planned;
     public string? Remarks { get; set; }
     public Guid CreatedBy { get; set; }
@@ -116,6 +160,165 @@ public class DailySubmission
     public Guid? SubmittedBy { get; set; }
     public DateTime? ReopenedAt { get; set; }
     public Guid? ReopenedBy { get; set; }
+}
+
+public class WorkCategory
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = null!;
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+    public string? Description { get; set; }
+    public bool IsActive { get; set; } = true;
+    public int DisplayOrder { get; set; }
+    public Guid? CreatedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class Initiative
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = null!;
+    public Guid? WorkCategoryId { get; set; }
+    public WorkCategory? WorkCategory { get; set; }
+    public Guid? ProjectId { get; set; }
+    public Project? Project { get; set; }
+    public string Number { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+    public string Status { get; set; } = InitiativeStatuses.Planned;
+    public string Priority { get; set; } = Priorities.Medium;
+    public Guid? OwnerId { get; set; }
+    public User? Owner { get; set; }
+    public DateOnly? TargetStart { get; set; }
+    public DateOnly? TargetEnd { get; set; }
+    public string? Remarks { get; set; }
+    public string? ResearchObjective { get; set; }
+    public string? Hypothesis { get; set; }
+    public string? ResearchStage { get; set; }
+    public string? SuccessCriteria { get; set; }
+    public string? ExperimentPlan { get; set; }
+    public string? Conclusion { get; set; }
+    public Guid CreatedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
+    public ICollection<InitiativeCollaborator> Collaborators { get; set; } = new List<InitiativeCollaborator>();
+    public ICollection<InitiativeMilestone> Milestones { get; set; } = new List<InitiativeMilestone>();
+    public ICollection<ResearchRecord> Records { get; set; } = new List<ResearchRecord>();
+}
+
+public class InitiativeCollaborator
+{
+    public Guid InitiativeId { get; set; }
+    public Initiative Initiative { get; set; } = null!;
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+}
+
+public class InitiativeMilestone
+{
+    public Guid Id { get; set; }
+    public Guid InitiativeId { get; set; }
+    public Initiative Initiative { get; set; } = null!;
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+    public Guid? OwnerId { get; set; }
+    public User? Owner { get; set; }
+    public DateOnly? TargetDate { get; set; }
+    public string Status { get; set; } = InitiativeStatuses.Planned;
+    public DateOnly? CompletedOn { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class ResearchRecord
+{
+    public Guid Id { get; set; }
+    public Guid InitiativeId { get; set; }
+    public Initiative Initiative { get; set; } = null!;
+    public string Title { get; set; } = "";
+    public DateOnly RecordedOn { get; set; }
+    public string? Objective { get; set; }
+    public string? Method { get; set; }
+    public string? Findings { get; set; }
+    public string? Outcome { get; set; }
+    public string? EvidenceLinks { get; set; }
+    public string? NextSteps { get; set; }
+    public Guid CreatedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class CeoInvitation
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string? JobTitle { get; set; }
+    public bool ActivateOnAccept { get; set; } = true;
+    public string TokenHash { get; set; } = "";
+    public string Status { get; set; } = InvitationStatuses.Pending;
+    public Guid InvitedById { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+}
+
+public class TeamInvitation
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = null!;
+    public string Name { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string? JobTitle { get; set; }
+    public string TokenHash { get; set; } = "";
+    public string Status { get; set; } = InvitationStatuses.Pending;
+    public Guid InvitedBy { get; set; }
+    public Guid? AcceptedUserId { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class TeamNotice
+{
+    public Guid Id { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Guid SenderId { get; set; }
+    public User Sender { get; set; } = null!;
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string Category { get; set; } = NoticeCategories.General;
+    public string Channel { get; set; } = NoticeChannels.Both;
+    public Guid? ProjectId { get; set; }
+    public string? LinkPath { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public ICollection<TeamNoticeRecipient> Recipients { get; set; } = new List<TeamNoticeRecipient>();
+}
+
+public class TeamNoticeRecipient
+{
+    public Guid Id { get; set; }
+    public Guid NoticeId { get; set; }
+    public TeamNotice Notice { get; set; } = null!;
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public string Email { get; set; } = "";
+    public DateTime? ReadAt { get; set; }
+    public EmailDelivery? Delivery { get; set; }
+}
+
+public class EmailDelivery
+{
+    public Guid Id { get; set; }
+    public Guid RecipientId { get; set; }
+    public TeamNoticeRecipient Recipient { get; set; } = null!;
+    public string Status { get; set; } = EmailDeliveryStatuses.Pending;
+    public int Attempts { get; set; }
+    public string? ErrorType { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class AuditLog

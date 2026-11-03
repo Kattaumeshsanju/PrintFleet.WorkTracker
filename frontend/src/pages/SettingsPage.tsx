@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button, Field, Loading, PageHeader, Panel, inputClass, useToast } from "../components/ui";
 import { api, errorText } from "../services/api";
 import type { AuditLog, Paged } from "../types";
-import { canManage, label } from "../utils/format";
+import { label } from "../utils/format";
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -12,11 +12,11 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [audit, setAudit] = useState<Paged<AuditLog> | null>(null);
-  const lead = canManage(user?.role);
+  const admin = user?.role === "Admin";
 
   useEffect(() => {
-    if (lead) api<Paged<AuditLog>>("/api/audit?page=1&pageSize=25").then(setAudit).catch(() => undefined);
-  }, [lead]);
+    if (admin) api<Paged<AuditLog>>("/api/audit?page=1&pageSize=25").then(setAudit).catch(() => undefined);
+  }, [admin]);
 
   async function changePassword(event: FormEvent) {
     event.preventDefault();
@@ -50,7 +50,7 @@ export function SettingsPage() {
           <Button type="submit">Update password</Button>
         </form>
       </Panel>
-      {lead ? (
+      {admin ? (
         <Panel title="Audit trail">
           {!audit ? <Loading /> : (
             <div className="overflow-x-auto">

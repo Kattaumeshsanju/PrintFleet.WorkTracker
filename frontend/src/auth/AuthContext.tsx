@@ -26,9 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem("wt_token");
     if (!token) {
       setLoading(false);
-      return;
+    } else {
+      refresh().catch(() => localStorage.removeItem("wt_token")).finally(() => setLoading(false));
     }
-    refresh().catch(() => localStorage.removeItem("wt_token")).finally(() => setLoading(false));
+    function onFocus() {
+      if (localStorage.getItem("wt_token")) refresh().catch(() => undefined);
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   const value = useMemo<AuthValue>(() => ({

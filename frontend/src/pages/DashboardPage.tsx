@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { WorkEntryModal } from "../components/WorkEntryModal";
-import { Badge, Button, Loading, Panel, Stat } from "../components/ui";
+import { Alert, Badge, Button, Loading, Panel, ProgressMeter, Stat } from "../components/ui";
 import { DayTimeline, EntryList } from "../timeline/DayTimeline";
 import { api, errorText } from "../services/api";
 import { useToast } from "../components/ui";
 import type { MonthlySheet, MyDashboard, TeamDashboard } from "../types";
-import { canManage, currentMonthValue, formatMinutes, greeting, longDate, parseMonth } from "../utils/format";
+import { canManage, hasOverview, currentMonthValue, formatMinutes, greeting, label, longDate, parseMonth } from "../utils/format";
 
 type View = "mine" | "team" | "combined";
 
 export function DashboardPage() {
   const { user } = useAuth();
   const toast = useToast();
+  const admin = user?.role === "Admin";
   const lead = canManage(user?.role);
   const [mine, setMine] = useState<MyDashboard | null>(null);
   const [team, setTeam] = useState<TeamDashboard | null>(null);
@@ -48,8 +49,8 @@ export function DashboardPage() {
     }
   }
 
-  if (error) return <div className="rounded-2xl bg-rose-50 px-4 py-3 text-rose-800">{error}</div>;
-  if (!mine || !user) return <Loading />;
+  if (error) return <Alert>{error}</Alert>;
+  if (!mine || !user) return <Loading label="Loading the dashboard" />;
 
   const others = team?.members.filter((member) => member.userId !== user.id) ?? [];
   const combined = (team?.members ?? [])
@@ -59,18 +60,35 @@ export function DashboardPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="font-display text-3xl font-semibold">{greeting(user.name)}</h1>
-        <p className="text-sm text-muted">{longDate(mine.date)} · {user.jobTitle ?? user.role}</p>
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">{greeting(user.name)}</h1>
+        <p className="text-sm text-muted">{longDate(mine.date)} · {user.jobTitle ?? label(user.role)}{user.departmentName ? ` · ${user.departmentName}` : ""}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(admin
+          ? [["/departments", "Departments"], ["/projects", "Projects"], ["/plans", "Monthly plans"], ["/organization-access", "Organization access"], ["/reports/team", "Reports"], ["/executive", "Executive overview"]]
+          : lead
+            ? [["/my-team", "Team members"], ["/projects", "Department projects"], ["/plans", "Monthly plan"], ["/initiatives", "Initiatives"], ["/my-team/history", "Team notices"]]
+            : [["/daily", "My daily work"], ["/monthly-plan", "My monthly plan"], ["/projects", "Assigned projects"], ["/reports/me", "My reports"]]
+        ).concat(hasOverview(user) && !admin ? [["/executive", "Organization overview"]] : []).map(([to, text]) => (
+          <Link key={to} className="rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink hover:border-brass" to={to}>{text}</Link>
+        ))}
       </div>
 
-      {lead && team ? (
+      {admin && team ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <Stat label="Team members" value={String(team.memberCount)} />
+          <Stat label="People" value={String(team.memberCount)} />
           <Stat label="Updated today" value={`${team.updatedToday} / ${team.memberCount}`} />
-          <Stat label="Total hours today" value={formatMinutes(team.totalMinutesToday)} />
-          <Stat label="Open tasks" value={String(team.openTasks)} />
+          <Stat label="Hours today" value={formatMinutes(team.totalMinutesToday)} />
+          <Stat label="Open goals" value={String(team.openTasks)} />
           <Stat label="Completed this month" value={String(team.completedThisMonth)} />
-          <Stat label="Blocked tasks" value={String(team.blockedTasks)} />
+          <Stat label="Blocked goals" value={String(team.blockedTasks)} />
+        </div>
+      ) : lead && team ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat label="Department members" value={String(team.memberCount)} />
+          <Stat label="Open goals" value={String(team.openTasks)} />
+          <Stat label="Completed this month" value={String(team.completedThisMonth)} />
+          <Stat label="Blocked goals" value={String(team.blockedTasks)} />
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -81,7 +99,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {lead ? (
+      {admin ? (
         <div className="flex gap-2">
           {([["mine", "My Work"], ["team", "Team Work"], ["combined", "Combined View"]] as const).map(([key, text]) => (
             <button key={key} className={`rounded-full px-4 py-1.5 text-sm font-semibold ${view === key ? "bg-ink text-white" : "bg-card text-ink ring-1 ring-line"}`} onClick={() => setView(key)}>{text}</button>
@@ -89,7 +107,7 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      {(view === "mine" || !lead) && (
+      {(view === "mine" || !admin) && (
         <Panel title="What did you work on today?" action={<Button onClick={() => setOpen(true)} disabled={!mine.today.canEdit}>+ Add My Work</Button>}>
           <DayTimeline entries={mine.today.entries} />
           <div className="mt-3"><EntryList entries={mine.today.entries} /></div>
@@ -100,7 +118,7 @@ export function DashboardPage() {
         </Panel>
       )}
 
-      {lead && view === "team" && team ? (
+      {admin && view === "team" && team ? (
         <Panel title="Team activity today">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
@@ -123,7 +141,20 @@ export function DashboardPage() {
         </Panel>
       ) : null}
 
-      {lead && view === "combined" ? (
+      {lead && !admin && team ? (
+        <Panel title="Department monthly plans" action={<Link className="text-sm font-semibold text-pine" to="/plans">Open overview</Link>}>
+          <div className="divide-y divide-line">
+            {team.members.filter((member) => member.userId !== user.id).map((member) => (
+              <Link key={member.userId} className="flex items-center justify-between py-2 text-sm" to={`/monthly-plan?userId=${member.userId}`}>
+                <span className="font-semibold">{member.name}</span>
+                <span className="text-muted">{member.jobTitle ?? label(member.role)}</span>
+              </Link>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+
+      {admin && view === "combined" ? (
         <Panel title="Combined timeline">
           <div className="divide-y divide-line">
             {combined.map(({ entry, name }) => (
@@ -139,33 +170,46 @@ export function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="My monthly progress">
-          <div className="mb-2 h-2 overflow-hidden rounded-full bg-[#efeadd]">
-            <div className="h-full bg-pine" style={{ width: `${Math.min(100, mine.month.completionPercent)}%` }} />
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <ProgressMeter value={mine.month.plannedTasks === 0 ? null : mine.month.completionPercent} label="Share of planned hours marked done" />
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div>Planned tasks <strong>{mine.month.plannedTasks}</strong></div>
             <div>Completed <strong>{mine.month.completed}</strong></div>
             <div>Planned hours <strong>{mine.month.plannedHours}</strong></div>
             <div>Actual hours <strong>{mine.month.actualHours}</strong></div>
+            <div>In progress <strong>{mine.month.inProgress}</strong></div>
+            <div>Blocked <strong>{mine.month.blocked}</strong></div>
           </div>
           <Link className="mt-3 inline-block text-sm font-semibold text-pine" to="/monthly-plan">Open monthly plan</Link>
         </Panel>
-        <Panel title="Upcoming tasks">
-          {mine.upcomingTasks.length === 0 ? <div className="text-sm text-muted">No open tasks this month.</div> : (
+        <Panel title="Upcoming deadlines">
+          {mine.upcomingTasks.length === 0 ? <div className="text-sm text-muted">No open goals this month.</div> : (
             <div className="space-y-2">
               {mine.upcomingTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between gap-3 rounded-xl bg-[#f7f3ea] px-3 py-2">
+                <div key={task.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2">
                   <div>
                     <div className="font-semibold">{task.title}</div>
                     <div className="text-xs text-muted">{task.projectName ?? "No project"} · due {task.plannedEndDate}</div>
                   </div>
-                  <Badge value={task.status} />
+                  <Badge value={task.overdue ? "Overdue" : task.status} />
                 </div>
               ))}
             </div>
           )}
         </Panel>
       </div>
+
+      <Panel title="Recent notifications">
+        {mine.notifications.length === 0 ? <p className="text-sm text-muted">Nothing needs attention.</p> : (
+          <div className="space-y-2">
+            {mine.notifications.slice(0, 5).map((notice, index) => (
+              <div key={notice.id ?? index} className="rounded-xl border border-line px-3 py-2 text-sm">
+                <div className="font-semibold">{notice.title}</div>
+                <div className="text-muted">{notice.message}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
 
       <WorkEntryModal open={open} date={mine.date} tasks={sheet?.tasks ?? []} entries={mine.today.entries} editing={null} onClose={() => setOpen(false)} onSaved={() => { load().catch((err) => toast(errorText(err), "error")); }} />
     </div>

@@ -54,9 +54,12 @@ public class DailyReminderService : BackgroundService
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var marker = today.ToString("yyyy-MM-dd");
-        var alreadySent = await db.AuditLogs.AsNoTracking().AnyAsync(
-            x => x.Action == "Reminder" && x.EntityType == "DailyReminder" && x.Details != null && x.Details.StartsWith(marker), ct);
-        if (alreadySent) return;
+        var prior = await db.AuditLogs
+            .Where(x => x.Action == "Reminder" && x.EntityType == "DailyReminder" && x.Details != null && x.Details.StartsWith(marker))
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefaultAsync(ct);
+        var retryOnly = prior is null ? null : ReminderLedger.FailedAddresses(prior.Details);
+        if (prior is not null && retryOnly!.Count == 0) return;
 
         if (!options.IsConfigured)
         {
@@ -68,7 +71,7 @@ public class DailyReminderService : BackgroundService
             return;
         }
 
-        var recipients = options.Recipients
+        var recipients = (retryOnly ?? options.Recipients)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -136,20 +139,28 @@ public class DailyReminderService : BackgroundService
             catch (Exception ex)
             {
                 failed.Add(address);
-                _logger.LogError(ex, "Could not send the daily reminder to {Address}", address);
+                _logger.LogError("Could not send the daily reminder to {Address}. {ErrorType}", address, ex.GetType().Name);
             }
         }
 
-        if (sent.Count == 0 && failed.Count > 0) return;
+        if (sent.Count == 0 && failed.Count > 0 && prior is null) return;
 
-        db.AuditLogs.Add(new AuditLog
+        var details = ReminderLedger.Describe(today, sent.Count, skipped.Count, failed);
+        if (prior is null)
         {
-            Action = "Reminder",
-            EntityType = "DailyReminder",
-            UserName = "WorkTracker",
-            Details = $"{marker} sent {sent.Count} ({string.Join(", ", sent)}); skipped {skipped.Count}; failed {failed.Count}",
-            CreatedAt = DateTime.UtcNow
-        });
+            db.AuditLogs.Add(new AuditLog
+            {
+                Action = "Reminder",
+                EntityType = "DailyReminder",
+                UserName = "WorkTracker",
+                Details = details,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            prior.Details = details;
+        }
         await db.SaveChangesAsync(ct);
         _logger.LogInformation("Daily reminder for {Date}: sent {Sent}, skipped {Skipped}, failed {Failed}", marker, sent.Count, skipped.Count, failed.Count);
     }

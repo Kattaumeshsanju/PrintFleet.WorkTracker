@@ -14,11 +14,12 @@ public class EmailOptions
     public int Minute { get; set; } = 0;
     public string[] Recipients { get; set; } = [];
 
-    public bool IsConfigured =>
+    public bool CanSend =>
         Enabled
         && !string.IsNullOrWhiteSpace(Host)
         && !string.IsNullOrWhiteSpace(Username)
         && !string.IsNullOrWhiteSpace(Password)
-        && !string.IsNullOrWhiteSpace(FromAddress)
-        && Recipients.Length > 0;
+        && !string.IsNullOrWhiteSpace(FromAddress);
+
+    public bool IsConfigured => CanSend && Recipients.Length > 0;
 }

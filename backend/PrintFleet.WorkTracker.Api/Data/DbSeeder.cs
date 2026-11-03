@@ -11,7 +11,6 @@ public static class DbSeeder
     private static readonly Guid John = Guid.Parse("10000000-0000-0000-0000-000000000002");
     private static readonly Guid David = Guid.Parse("10000000-0000-0000-0000-000000000003");
     private static readonly Guid Rahul = Guid.Parse("10000000-0000-0000-0000-000000000004");
-    private static readonly Guid Suresh = Guid.Parse("10000000-0000-0000-0000-000000000005");
     private static readonly Guid Anita = Guid.Parse("10000000-0000-0000-0000-000000000006");
     private static readonly Guid Meera = Guid.Parse("10000000-0000-0000-0000-000000000007");
 
@@ -35,7 +34,6 @@ public static class DbSeeder
             [John] = SheetId(2),
             [David] = SheetId(3),
             [Rahul] = SheetId(4),
-            [Suresh] = SheetId(5),
             [Anita] = SheetId(6),
             [Meera] = SheetId(7)
         };
@@ -45,7 +43,6 @@ public static class DbSeeder
             User(John, "John Mathew", "john@company.com", Roles.TeamMember, "Software Engineer", hash, now),
             User(David, "David Kumar", "david@company.com", Roles.TeamMember, "Software Engineer", hash, now),
             User(Rahul, "Rahul Sharma", "rahul@company.com", Roles.TeamMember, "Software Engineer", hash, now),
-            User(Suresh, "Suresh Nair", "suresh@company.com", Roles.TeamMember, "Software Engineer", hash, now),
             User(Anita, "Anita Desai", "anita@company.com", Roles.TeamMember, "Software Engineer", hash, now),
             User(Meera, "Meera Iyer", "meera@company.com", Roles.TeamMember, "Software Engineer", hash, now));
 
@@ -119,12 +116,6 @@ public static class DbSeeder
         Task(20, Rahul, Hmi, "Bug triage", "Triage open HMI defects from the last build.", Priorities.Medium, 6, 18, 12, TaskStatuses.InProgress);
         Task(21, Rahul, Hmi, "Icon pass on settings", "Replace placeholder icons on settings.", Priorities.Low, 1, 2, 4, TaskStatuses.Completed);
 
-        Task(22, Suresh, Machine, "Machine communication tests", "End-to-end tests for machine communication.", Priorities.High, 1, 15, 30, TaskStatuses.InProgress);
-        Task(23, Suresh, Laser, "Scanner firmware handshake", "Complete the scanner firmware handshake.", Priorities.Critical, 3, 10, 16, TaskStatuses.Blocked, "Waiting for scanner vendor firmware.");
-        Task(24, Suresh, Plc, "PLC tag verification", "Verify the released PLC tag list.", Priorities.High, 8, 20, 18, TaskStatuses.Planned);
-        Task(25, Suresh, Hmi, "Regression checklist", "October regression checklist for HMI.", Priorities.Medium, 16, 30, 14, TaskStatuses.Planned);
-        Task(26, Suresh, Machine, "Test jig setup", "Prepare the bench jig for communication tests.", Priorities.Medium, 1, 2, 6, TaskStatuses.Completed);
-
         Task(27, Anita, Hmi, "Build history filters", "Filter build history by date and status.", Priorities.Medium, 1, 12, 18, TaskStatuses.InProgress);
         Task(28, Anita, Machine, "Gas flow UI", "Gas flow setpoints and readback.", Priorities.High, 6, 17, 22, TaskStatuses.Blocked, "Mechanical drawing is not released.");
         Task(29, Anita, Support, "Support ticket review", "Review open field tickets for the HMI.", Priorities.Low, 1, 31, 10, TaskStatuses.InProgress);
@@ -183,7 +174,6 @@ public static class DbSeeder
             (John, 7, 8, "PLC communication", "machine settings"),
             (David, 12, 13, "laser path planning", "alarm banners"),
             (Rahul, 17, 18, "settings layout", "PrintFleet alarms"),
-            (Suresh, 22, 23, "machine communication tests", "scanner handshake"),
             (Anita, 27, 29, "build history filters", "support tickets"),
             (Meera, 32, 35, "RTC diagnostics", "emission screen")
         };
@@ -226,11 +216,6 @@ public static class DbSeeder
         Entry(David, today, "11:00", "13:00", 13, "Adjusted HMI alarm banner layout", EntryStatuses.InProgress);
         Entry(David, today, "14:00", "16:30", 14, "Drafted the machine homing sequence", EntryStatuses.InProgress);
         Submit(David, today);
-
-        Entry(Suresh, today, "09:00", "12:00", 22, "Ran machine communication tests", EntryStatuses.InProgress);
-        Entry(Suresh, today, "13:00", "15:00", 23, "Tried the scanner firmware handshake", EntryStatuses.Blocked, "Vendor firmware still missing.");
-        Entry(Suresh, today, "15:15", "17:00", 24, "Started PLC tag verification", EntryStatuses.InProgress);
-        Submit(Suresh, today);
 
         Entry(Meera, today, "09:15", "11:30", 32, "Checked RTC status diagnostics", EntryStatuses.InProgress);
         Entry(Meera, today, "11:30", "13:00", 35, "Fixed emission screen spacing", EntryStatuses.Completed);

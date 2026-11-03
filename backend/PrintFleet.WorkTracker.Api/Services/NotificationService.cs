@@ -9,6 +9,8 @@ namespace PrintFleet.WorkTracker.Api.Services;
 public interface INotificationService
 {
     Task<IReadOnlyList<NotificationDto>> GetAsync(CancellationToken ct);
+    Task MarkReadAsync(Guid id, CancellationToken ct);
+    Task MarkAllReadAsync(CancellationToken ct);
 }
 
 public class NotificationService : INotificationService
@@ -28,9 +30,60 @@ public class NotificationService : INotificationService
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var notes = new List<NotificationDto>();
-        if (_current.IsTeamLead) await AddLeadNotes(notes, today, ct);
+        notes.AddRange(await StoredAsync(ct));
+        if (_current.Role == Roles.Ceo) await AddExecutiveNotes(notes, today, ct);
+        else if (_current.IsTeamLead) await AddLeadNotes(notes, today, ct);
         else await AddMemberNotes(notes, today, _current.UserId, ct);
-        return notes.Take(18).ToList();
+        return notes.Take(30).ToList();
+    }
+
+    public async Task MarkReadAsync(Guid id, CancellationToken ct)
+    {
+        var row = await _db.TeamNoticeRecipients.FirstOrDefaultAsync(x => x.Id == id && x.UserId == _current.UserId, ct);
+        if (row is null) return;
+        row.ReadAt ??= DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task MarkAllReadAsync(CancellationToken ct)
+    {
+        var rows = await _db.TeamNoticeRecipients.Where(x => x.UserId == _current.UserId && x.ReadAt == null).ToListAsync(ct);
+        var now = DateTime.UtcNow;
+        foreach (var row in rows) row.ReadAt = now;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task<List<NotificationDto>> StoredAsync(CancellationToken ct)
+    {
+        var rows = await _db.TeamNoticeRecipients.AsNoTracking()
+            .Where(x => x.UserId == _current.UserId && x.ReadAt == null && (x.Notice.Channel == NoticeChannels.InApp || x.Notice.Channel == NoticeChannels.Both))
+            .OrderByDescending(x => x.Notice.CreatedAt)
+            .Take(20)
+            .Select(x => new { x.Id, x.Notice.Title, x.Notice.Body, x.Notice.LinkPath, Sender = x.Notice.Sender.Name, x.Notice.CreatedAt })
+            .ToListAsync(ct);
+        return rows.Select(x => new NotificationDto
+        {
+            Id = x.Id,
+            Severity = "info",
+            Title = x.Title,
+            Message = x.Body.Length <= 240 ? x.Body : x.Body[..240],
+            Href = x.LinkPath is "/projects" or "/plans" ? x.LinkPath : null,
+            Unread = true,
+            SenderName = x.Sender,
+            CreatedAt = x.CreatedAt
+        }).ToList();
+    }
+
+    private async Task AddExecutiveNotes(List<NotificationDto> notes, DateOnly today, CancellationToken ct)
+    {
+        var overdue = await _db.MonthlyTasks.CountAsync(
+            x => x.Sheet.Year == today.Year && x.Sheet.Month == today.Month && x.PlannedEndDate < today && TaskStatuses.Open.Contains(x.Status), ct);
+        var blocked = await _db.MonthlyTasks.CountAsync(
+            x => x.Sheet.Year == today.Year && x.Sheet.Month == today.Month && x.Status == TaskStatuses.Blocked, ct);
+        if (overdue > 0)
+            notes.Add(new NotificationDto { Severity = "critical", Title = "Overdue goals", Message = $"{overdue} open goal{(overdue == 1 ? "" : "s")} are past their target date.", Href = "/executive/risks" });
+        if (blocked > 0)
+            notes.Add(new NotificationDto { Severity = "warning", Title = "Blocked goals", Message = $"{blocked} goal{(blocked == 1 ? "" : "s")} are blocked.", Href = "/executive/risks" });
     }
 
     private async Task AddMemberNotes(List<NotificationDto> notes, DateOnly today, Guid userId, CancellationToken ct)
@@ -91,7 +144,8 @@ public class NotificationService : INotificationService
     {
         var usersQuery = await _access.ScopeUsersAsync(_db.Users.AsNoTracking().Where(x => x.IsActive), null, ct);
         var users = await usersQuery.OrderBy(x => x.Name).ToListAsync(ct);
-        if (!WorkMetrics.IsWeekend(today))
+        var userIds = users.Select(x => x.Id).ToArray();
+        if (await _access.IsOrganizationViewerAsync(ct) && !WorkMetrics.IsWeekend(today))
         {
             var submittedIds = await _db.DailySubmissions.AsNoTracking()
                 .Where(x => x.WorkDate == today && (x.Status == SubmissionStatuses.Submitted || x.DayType != null))
@@ -111,13 +165,15 @@ public class NotificationService : INotificationService
 
         var previous = today.AddDays(-1);
         while (WorkMetrics.IsWeekend(previous)) previous = previous.AddDays(-1);
+        if (await _access.IsOrganizationViewerAsync(ct))
+        {
         var markedIds = await _db.DailySubmissions.AsNoTracking()
-            .Where(x => x.WorkDate == previous && x.DayType != null)
+            .Where(x => userIds.Contains(x.UserId) && x.WorkDate == previous && x.DayType != null)
             .Select(x => x.UserId)
             .ToListAsync(ct);
         var marked = markedIds.ToHashSet();
         var hours = await _db.DailyWorkEntries.AsNoTracking()
-            .Where(x => x.WorkDate == previous)
+            .Where(x => userIds.Contains(x.UserId) && x.WorkDate == previous)
             .GroupBy(x => x.UserId)
             .Select(g => new { g.Key, Minutes = g.Sum(x => x.DurationMinutes) })
             .ToDictionaryAsync(x => x.Key, x => x.Minutes, ct);
@@ -147,10 +203,11 @@ public class NotificationService : INotificationService
                 });
             }
         }
+        }
 
         var monthTasks = await _db.MonthlyTasks.AsNoTracking()
             .Include(x => x.Sheet).ThenInclude(x => x.User)
-            .Where(x => x.Sheet.Year == today.Year && x.Sheet.Month == today.Month && x.Sheet.User.IsActive)
+            .Where(x => userIds.Contains(x.Sheet.UserId) && x.Sheet.Year == today.Year && x.Sheet.Month == today.Month && x.Sheet.User.IsActive)
             .ToListAsync(ct);
 
         foreach (var task in monthTasks.Where(x => TaskStatuses.Open.Contains(x.Status) && x.PlannedEndDate < today).Take(5))

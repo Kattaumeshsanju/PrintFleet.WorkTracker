@@ -39,9 +39,9 @@ public class DailyWorkService : IDailyWorkService
     {
         var page = query.Page < 1 ? 1 : query.Page;
         var pageSize = query.PageSize is < 1 or > 100 ? 50 : query.PageSize;
-        var target = ResolveOptionalUser(query.UserId);
+        var target = await ResolveListUserAsync(query.UserId, ct);
 
-        var entries = BaseQuery();
+        var entries = await OwnedQuery(ct);
         if (target is Guid userId) entries = entries.Where(x => x.UserId == userId);
         if (query.WorkDate is DateOnly day) entries = entries.Where(x => x.WorkDate == day);
         if (query.From is DateOnly from) entries = entries.Where(x => x.WorkDate >= from);
@@ -84,7 +84,7 @@ public class DailyWorkService : IDailyWorkService
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
-        var entries = await BaseQuery().Where(x => x.UserId == target && x.WorkDate == date)
+        var entries = await (await OwnedQuery(ct)).Where(x => x.UserId == target && x.WorkDate == date)
             .OrderBy(x => x.StartTime).ToListAsync(ct);
         var submission = await _db.DailySubmissions.AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == target && x.WorkDate == date, ct);
@@ -113,6 +113,7 @@ public class DailyWorkService : IDailyWorkService
         await EnsureEditable(userId, request.WorkDate, ct);
         var task = await LoadOwnedTask(request.MonthlyTaskId, userId, request.WorkDate, ct);
         var (start, end, minutes) = ReadTimes(request);
+        await EnsureNotDuplicate(userId, request.WorkDate, task.Id, start, null, ct);
         await EnsureNoOverlap(userId, request.WorkDate, start, end, null, request.AllowOverlap, ct);
 
         var now = DateTime.UtcNow;
@@ -151,6 +152,7 @@ public class DailyWorkService : IDailyWorkService
 
         var task = await LoadOwnedTask(request.MonthlyTaskId, entry.UserId, request.WorkDate, ct);
         var (start, end, minutes) = ReadTimes(request);
+        await EnsureNotDuplicate(entry.UserId, request.WorkDate, task.Id, start, entry.Id, ct);
         await EnsureNoOverlap(entry.UserId, request.WorkDate, start, end, entry.Id, request.AllowOverlap, ct);
 
         entry.MonthlyTaskId = task.Id;
@@ -212,7 +214,7 @@ public class DailyWorkService : IDailyWorkService
         await EnsureMonthOpen(userId, request.WorkDate, ct);
         var submission = await _db.DailySubmissions.FirstOrDefaultAsync(x => x.UserId == userId && x.WorkDate == request.WorkDate, ct);
         if (submission?.Status == SubmissionStatuses.Submitted)
-            throw new AppException("This day is submitted. The Team Lead must reopen it before the mark can change.");
+            throw new AppException("This day is submitted. An admin must reopen it before the mark can change.");
 
         var dayType = string.IsNullOrWhiteSpace(request.DayType) ? null : request.DayType;
         if (dayType is null)
@@ -250,7 +252,9 @@ public class DailyWorkService : IDailyWorkService
 
     public async Task<DayViewDto> ReopenAsync(ReopenDayRequest request, CancellationToken ct)
     {
-        _current.EnsureLead();
+        if (!await _access.IsAdminAsync(ct))
+            throw new AppException("Only the admin can reopen a submitted day.", StatusCodes.Status403Forbidden);
+        await _access.EnsureCanViewDailyAsync(request.UserId, ct);
         var submission = await _db.DailySubmissions.FirstOrDefaultAsync(x => x.UserId == request.UserId && x.WorkDate == request.WorkDate, ct);
         if (submission is null || submission.Status != SubmissionStatuses.Submitted)
             throw new AppException("That day is not submitted.");
@@ -321,7 +325,7 @@ public class DailyWorkService : IDailyWorkService
 
         var start = new DateOnly(year, month, 1);
         var end = start.AddMonths(1);
-        var entries = await BaseQuery()
+        var entries = await (await OwnedQuery(ct))
             .Where(x => x.UserId == target && x.WorkDate >= start && x.WorkDate < end)
             .OrderBy(x => x.WorkDate).ThenBy(x => x.StartTime)
             .ToListAsync(ct);
@@ -363,13 +367,13 @@ public class DailyWorkService : IDailyWorkService
         };
     }
 
-    private IQueryable<DailyWorkEntry> BaseQuery()
+    private async Task<IQueryable<DailyWorkEntry>> OwnedQuery(CancellationToken ct)
     {
         var query = _db.DailyWorkEntries.AsNoTracking()
             .Include(x => x.User)
             .Include(x => x.MonthlyTask).ThenInclude(x => x.Project)
             .AsQueryable();
-        if (!_current.IsTeamLead)
+        if (!await _access.IsOrganizationViewerAsync(ct))
             query = query.Where(x => x.UserId == _current.UserId);
         return query;
     }
@@ -378,14 +382,17 @@ public class DailyWorkService : IDailyWorkService
     {
         if (requested is null || requested == Guid.Empty || requested == _current.UserId)
             return _current.UserId;
-        await _access.EnsureCanManageUserAsync(requested.Value, ct);
+        await _access.EnsureCanViewDailyAsync(requested.Value, ct);
         return requested.Value;
     }
 
-    private Guid? ResolveOptionalUser(Guid? requested)
+    private async Task<Guid?> ResolveListUserAsync(Guid? requested, CancellationToken ct)
     {
-        if (!_current.IsTeamLead) return _current.UserId;
-        return requested is null || requested == Guid.Empty ? null : requested;
+        if (await _access.IsOrganizationViewerAsync(ct))
+            return requested is null || requested == Guid.Empty ? null : requested;
+        if (requested is Guid id && id != Guid.Empty && id != _current.UserId)
+            throw new AppException("Daily work is private to that employee.", StatusCodes.Status403Forbidden);
+        return _current.UserId;
     }
 
     private async Task EnsureEditable(Guid userId, DateOnly date, CancellationToken ct)
@@ -394,7 +401,7 @@ public class DailyWorkService : IDailyWorkService
         var submitted = await _db.DailySubmissions.AnyAsync(
             x => x.UserId == userId && x.WorkDate == date && x.Status == SubmissionStatuses.Submitted, ct);
         if (submitted)
-            throw new AppException("This daily update is submitted. The Team Lead must reopen it before changes.");
+            throw new AppException("This daily update is submitted. An admin must reopen it before changes.");
     }
 
     private async Task EnsureMonthOpen(Guid userId, DateOnly date, CancellationToken ct)
@@ -414,7 +421,17 @@ public class DailyWorkService : IDailyWorkService
             throw new AppException("That monthly task belongs to another employee.", StatusCodes.Status403Forbidden);
         if (task.Sheet.Year != workDate.Year || task.Sheet.Month != workDate.Month)
             throw new AppException("The monthly task is not part of this month's work sheet.");
+        if (task.Status == TaskStatuses.Cancelled)
+            throw new AppException("Cancelled goals cannot take new daily work. Choose another goal.");
         return task;
+    }
+
+    private async Task EnsureNotDuplicate(Guid userId, DateOnly date, Guid taskId, TimeOnly start, Guid? ignoreId, CancellationToken ct)
+    {
+        var duplicate = await _db.DailyWorkEntries.AnyAsync(
+            x => x.UserId == userId && x.WorkDate == date && x.MonthlyTaskId == taskId && x.StartTime == start && x.Id != ignoreId, ct);
+        if (duplicate)
+            throw new AppException("That work entry already exists for this goal and start time.", StatusCodes.Status409Conflict);
     }
 
     private async Task EnsureNoOverlap(Guid userId, DateOnly date, TimeOnly start, TimeOnly end, Guid? ignoreId, bool allowOverlap, CancellationToken ct)

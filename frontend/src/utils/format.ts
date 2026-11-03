@@ -6,13 +6,45 @@ export const PROJECT_STATUSES = ["Active", "OnHold", "Completed", "Cancelled"] a
 const LABELS: Record<string, string> = {
   InProgress: "In Progress",
   OnHold: "On Hold",
+  Ongoing: "Ongoing",
+  ProofOfConcept: "Proof of Concept",
   TeamLead: "Team Lead",
-  TeamMember: "Team Member",
+  TeamMember: "Employee",
   Admin: "Admin",
+  CEO: "CEO",
+  InReview: "In Review",
+  SentToProvider: "Sent to mail provider",
+  InApp: "In app",
+  Partial: "Partial",
+  Bounced: "Bounced",
+  General: "General Announcement",
+  Project: "Project Update",
+  Plan: "Monthly Plan",
+  Deadline: "Deadline Reminder",
+  Meeting: "Meeting",
+  Blocker: "Blocker",
+  Email: "Email",
+  Both: "Email and in-app",
 };
+
+export function goalCompletion(percent: number, counted: number) {
+  return counted === 0 ? "No goals" : `${percent}%`;
+}
 
 export function canManage(role?: string | null) {
   return role === "TeamLead" || role === "Admin";
+}
+
+export function canViewOrganization(role?: string | null) {
+  return role === "Admin" || role === "CEO";
+}
+
+export function hasOverview(user?: { role?: string | null; organizationOverview?: boolean } | null) {
+  return Boolean(user?.organizationOverview) || canViewOrganization(user?.role);
+}
+
+export function hasReports(user?: { role?: string | null; organizationReports?: boolean } | null) {
+  return Boolean(user?.organizationReports) || canViewOrganization(user?.role);
 }
 
 export function label(value: string) {

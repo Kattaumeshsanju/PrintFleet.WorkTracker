@@ -19,10 +19,40 @@ public interface IExportService
     byte[] MonthTimelinePdf(MonthTimelineDto timeline);
     byte[] RangeExcel(RangeReportDto report);
     byte[] RangePdf(RangeReportDto report);
+    byte[] InitiativesExcel(IReadOnlyList<InitiativeDto> rows);
 }
 
 public class ExportService : IExportService
 {
+    public byte[] InitiativesExcel(IReadOnlyList<InitiativeDto> rows)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Initiatives");
+        var headers = new[] { "Number", "Title", "Department", "Work category", "Project", "Status", "Priority", "Research stage", "Owner", "Target start", "Target completion", "Remarks" };
+        for (var column = 0; column < headers.Length; column++) sheet.Cell(1, column + 1).Value = headers[column];
+        var row = 2;
+        foreach (var item in rows)
+        {
+            sheet.Cell(row, 1).Value = item.Number;
+            sheet.Cell(row, 2).Value = item.Title;
+            sheet.Cell(row, 3).Value = item.DepartmentName;
+            sheet.Cell(row, 4).Value = item.WorkCategoryName ?? "";
+            sheet.Cell(row, 5).Value = item.ProjectName ?? "";
+            sheet.Cell(row, 6).Value = item.Status;
+            sheet.Cell(row, 7).Value = item.Priority;
+            sheet.Cell(row, 8).Value = item.ResearchStage ?? "";
+            sheet.Cell(row, 9).Value = item.OwnerName ?? "";
+            sheet.Cell(row, 10).Value = item.TargetStart?.ToString("yyyy-MM-dd") ?? "";
+            sheet.Cell(row, 11).Value = item.TargetEnd?.ToString("yyyy-MM-dd") ?? "";
+            sheet.Cell(row, 12).Value = item.Remarks ?? "";
+            row++;
+        }
+        sheet.Columns().AdjustToContents();
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
     public byte[] MonthlyExcel(MonthlyReportDto report)
     {
         using var workbook = new XLWorkbook();
@@ -109,7 +139,7 @@ public class ExportService : IExportService
         var kpi = workbook.AddWorksheet("KPIs");
         kpi.Cell(1, 1).Value = "How these KPIs are calculated";
         kpi.Cell(2, 1).Value = "Plan completion";
-        kpi.Cell(2, 2).Value = "Completed tasks divided by all monthly tasks.";
+        kpi.Cell(2, 2).Value = "Share of estimated hours marked done on goals that are not cancelled. A completed goal counts as 100%. Logged time does not change it.";
         kpi.Cell(3, 1).Value = "Hours attainment";
         kpi.Cell(3, 2).Value = "Logged hours divided by planned hours on the monthly tasks.";
         kpi.Cell(4, 1).Value = "Utilization";

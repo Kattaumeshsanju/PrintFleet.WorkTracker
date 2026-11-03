@@ -29,6 +29,11 @@ public class ExceptionMiddleware
             _logger.LogWarning(ex, "Request rejected: {Message}", ex.Message);
             await Write(context, ex.StatusCode, ex.Message);
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrent update rejected");
+            await Write(context, StatusCodes.Status409Conflict, "This record was saved by someone else. Reload it and try again.");
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             _logger.LogWarning(ex, "Unique constraint violation");

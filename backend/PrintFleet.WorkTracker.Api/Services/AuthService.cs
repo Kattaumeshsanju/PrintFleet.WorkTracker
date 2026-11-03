@@ -42,14 +42,23 @@ public class AuthService : IAuthService
 
         var (token, expires) = _tokens.CreateToken(user);
         _logger.LogInformation("User {Email} signed in", user.Email);
-        return new LoginResponse { Token = token, ExpiresAt = expires, User = UserMapper.ToDto(user) };
+        return new LoginResponse { Token = token, ExpiresAt = expires, User = await WithAccessAsync(user, ct) };
     }
 
     public async Task<UserDto> MeAsync(CancellationToken ct)
     {
         var user = await _db.Users.AsNoTracking().Include(x => x.Department).FirstOrDefaultAsync(x => x.Id == _current.UserId && x.IsActive, ct)
             ?? throw new AppException("Account was not found.", StatusCodes.Status401Unauthorized);
-        return UserMapper.ToDto(user);
+        return await WithAccessAsync(user, ct);
+    }
+
+    private async Task<UserDto> WithAccessAsync(User user, CancellationToken ct)
+    {
+        var dto = UserMapper.ToDto(user);
+        var grants = await _db.UserPermissions.AsNoTracking().Where(x => x.UserId == user.Id).Select(x => x.Permission).ToListAsync(ct);
+        dto.OrganizationOverview = AccessRules.Overview(user.Role, grants.Contains(OrganizationPermissions.Overview));
+        dto.OrganizationReports = AccessRules.Reports(user.Role, grants.Contains(OrganizationPermissions.Reports));
+        return dto;
     }
 
     public async Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct)

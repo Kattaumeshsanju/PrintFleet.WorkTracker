@@ -7,7 +7,7 @@ import { Badge, Button, Loading, PageHeader, Panel, useToast } from "../componen
 import { DayTimeline } from "../timeline/DayTimeline";
 import { api, downloadFile, errorText } from "../services/api";
 import type { CalendarMonth, DailyEntry, DayView, MonthlySheet, User } from "../types";
-import { canManage, formatMinutes, label, todayInput } from "../utils/format";
+import { canViewOrganization, formatMinutes, label, todayInput } from "../utils/format";
 
 export function DailyPage() {
   const { user } = useAuth();
@@ -24,11 +24,12 @@ export function DailyPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<DailyEntry | null>(null);
   const [error, setError] = useState("");
-  const lead = canManage(user?.role);
+  const admin = user?.role === "Admin";
+  const reviewer = canViewOrganization(user?.role);
   const target = userId || user?.id || "";
 
   async function load(nextDate = date, nextUser = userId) {
-    const owner = lead && nextUser ? nextUser : undefined;
+    const owner = reviewer && nextUser ? nextUser : undefined;
     const query = new URLSearchParams({ date: nextDate });
     if (owner) query.set("userId", owner);
     const month = nextDate.slice(0, 7);
@@ -47,8 +48,8 @@ export function DailyPage() {
   }
 
   useEffect(() => {
-    if (lead) api<User[]>("/api/users").then(setPeople).catch(() => undefined);
-  }, [lead]);
+    if (reviewer) api<User[]>("/api/users").then(setPeople).catch(() => undefined);
+  }, [reviewer]);
 
   useEffect(() => {
     load().catch((err) => setError(errorText(err)));
@@ -110,13 +111,13 @@ export function DailyPage() {
 
   return (
     <div>
-      <PageHeader title={day.userId === user?.id ? "My Daily Timeline" : `${day.userName}'s timeline`} subtitle={day.jobTitle ?? ""} actions={
+      <PageHeader title={day.userId === user?.id ? "My Daily Work" : `${day.userName}'s daily work`} subtitle="Record what you actually did today. Logging time does not complete a monthly goal. This timeline stays private." actions={
         <>
           <Button variant="ghost" onClick={() => downloadFile(`/api/reports/daily/export?date=${date}${target ? `&userId=${target}` : ""}&format=xlsx`, `${day.userName}-${date}.xlsx`).catch((err) => toast(errorText(err), "error"))}>Excel</Button>
           <Button variant="ghost" onClick={() => downloadFile(`/api/reports/daily/export?date=${date}${target ? `&userId=${target}` : ""}&format=pdf`, `${day.userName}-${date}.pdf`).catch((err) => toast(errorText(err), "error"))}>PDF</Button>
           <Button variant="ghost" onClick={() => {
             const [year, monthNumber] = date.slice(0, 7).split("-");
-            const owner = lead && userId ? `&userId=${userId}` : "";
+            const owner = reviewer && userId ? `&userId=${userId}` : "";
             downloadFile(`/api/reports/daily/month-export?year=${year}&month=${Number(monthNumber)}${owner}`, `${day.userName}-${year}-${monthNumber}-timeline.pdf`).catch((err) => toast(errorText(err), "error"));
           }}>Month PDF</Button>
           {day.canEdit ? <Button onClick={() => { setEditing(null); setOpen(true); }}>+ Add Work Entry</Button> : null}
@@ -126,7 +127,7 @@ export function DailyPage() {
         <label className="text-sm font-semibold">Date
           <input className="mt-1 block rounded-xl border border-line bg-white px-3 py-2" type="date" value={date} onChange={(event) => changeDate(event.target.value)} />
         </label>
-        {lead ? (
+        {reviewer ? (
           <label className="text-sm font-semibold">Employee
             <select className="mt-1 block rounded-xl border border-line bg-white px-3 py-2" value={userId} onChange={(event) => setUserId(event.target.value)}>
               <option value="">Myself</option>
@@ -155,7 +156,7 @@ export function DailyPage() {
       {tab === "table" ? (
         <div className="overflow-x-auto rounded-2xl border border-line bg-card">
           <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="bg-[#f7f3ea] text-xs tracking-wide text-muted uppercase"><tr>{["Start", "End", "Duration", "Monthly task", "Activity", "Status", "Remarks", ""].map((heading) => <th key={heading} className="px-3 py-2">{heading}</th>)}</tr></thead>
+            <thead className="bg-slate-50 text-xs tracking-wide text-muted uppercase"><tr>{["Start", "End", "Duration", "Monthly task", "Activity", "Status", "Remarks", ""].map((heading) => <th key={heading} className="px-3 py-2">{heading}</th>)}</tr></thead>
             <tbody>
               {day.entries.map((entry) => (
                 <tr key={entry.id} className="border-t border-line">
@@ -196,7 +197,7 @@ export function DailyPage() {
 
       <div className="mt-4 flex gap-2">
         {day.canEdit ? <Button variant="secondary" onClick={submit} disabled={day.entries.length === 0}>Submit Daily Update</Button> : null}
-        {lead && day.submissionStatus === "Submitted" ? <Button variant="ghost" onClick={reopen}>Reopen update</Button> : null}
+        {admin && day.submissionStatus === "Submitted" ? <Button variant="ghost" onClick={reopen}>Reopen update</Button> : null}
         {day.submissionStatus === "Submitted" ? <span className="self-center text-sm text-pine">Submitted ✓ {day.submittedAt ? new Date(day.submittedAt).toLocaleString() : ""}</span> : <span className="self-center text-sm text-muted">{label(day.submissionStatus)}</span>}
       </div>
       <WorkEntryModal open={open} date={date} tasks={sheet?.tasks ?? []} entries={day.entries} editing={editing} onClose={() => setOpen(false)} onSaved={() => { load().catch((err) => toast(errorText(err), "error")); }} />

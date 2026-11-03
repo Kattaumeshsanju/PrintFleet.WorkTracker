@@ -11,7 +11,7 @@ public interface IReportService
 {
     Task<MonthlyReportDto> MonthlyAsync(int year, int month, Guid? userId, CancellationToken ct);
     Task<RangeReportDto> RangeAsync(DateOnly from, DateOnly to, Guid? userId, CancellationToken ct);
-    Task<TeamReportDto> TeamAsync(int year, int month, bool includeSelf, Guid? departmentId, CancellationToken ct);
+    Task<TeamReportDto> TeamAsync(int year, int month, bool includeSelf, Guid? departmentId, bool organizationWide, CancellationToken ct);
 }
 
 public class ReportService : IReportService
@@ -35,7 +35,7 @@ public class ReportService : IReportService
     {
         if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
         var target = userId is null || userId == Guid.Empty || userId == _current.UserId ? _current.UserId : userId.Value;
-        if (target != _current.UserId) await _access.EnsureCanManageUserAsync(target, ct);
+        if (target != _current.UserId) await _access.EnsureCanViewDailyAsync(target, ct);
 
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
@@ -87,7 +87,7 @@ public class ReportService : IReportService
             throw new AppException("Start date must be on or before the end date.");
 
         var target = userId is null || userId == Guid.Empty || userId == _current.UserId ? _current.UserId : userId.Value;
-        if (target != _current.UserId) await _access.EnsureCanManageUserAsync(target, ct);
+        if (target != _current.UserId) await _access.EnsureCanViewDailyAsync(target, ct);
 
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
@@ -133,26 +133,42 @@ public class ReportService : IReportService
         return entries.Select(DailyWorkService.MapEntry).ToList();
     }
 
-    public async Task<TeamReportDto> TeamAsync(int year, int month, bool includeSelf, Guid? departmentId, CancellationToken ct)
+    public async Task<TeamReportDto> TeamAsync(int year, int month, bool includeSelf, Guid? departmentId, bool organizationWide, CancellationToken ct)
     {
-        _current.EnsureLead();
+        var viewer = await _access.IsOrganizationViewerAsync(ct);
+        var organizationReports = await _access.CanViewOrganizationReportsAsync(ct);
+        if (organizationWide)
+        {
+            if (!organizationReports)
+                throw new AppException("You do not have access to organization reports.", StatusCodes.Status403Forbidden);
+        }
+        else if (!viewer)
+            _current.EnsureLead();
         if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
 
-        var plans = await _monthly.TeamAsync(year, month, null, null, null, null, null, departmentId, ct);
+        var plans = await _monthly.TeamAsync(year, month, null, null, null, null, null, departmentId, ct, organizationWide);
         var rowsSource = plans.Employees.Where(x => includeSelf || x.User.Id != _current.UserId).ToList();
+        var showDaily = viewer;
         var userIds = rowsSource.Select(x => x.User.Id).ToArray();
         var start = new DateOnly(year, month, 1);
         var end = start.AddMonths(1);
-        var weekdays = ElapsedWeekdays(year, month);
-        var daily = await _db.DailyWorkEntries.AsNoTracking()
+        var weekdays = showDaily ? ElapsedWeekdays(year, month) : new List<DateOnly>();
+        var loggedMinutes = userIds.Length == 0
+            ? new Dictionary<Guid, int>()
+            : await _db.DailyWorkEntries.AsNoTracking()
+                .Where(x => userIds.Contains(x.UserId) && x.WorkDate >= start && x.WorkDate < end)
+                .GroupBy(x => x.UserId)
+                .Select(g => new { g.Key, Minutes = g.Sum(x => x.DurationMinutes) })
+                .ToDictionaryAsync(x => x.Key, x => x.Minutes, ct);
+        var daily = showDaily ? await _db.DailyWorkEntries.AsNoTracking()
             .Where(x => userIds.Contains(x.UserId) && x.WorkDate >= start && x.WorkDate < end)
             .GroupBy(x => new { x.UserId, x.WorkDate })
             .Select(g => new { g.Key.UserId, g.Key.WorkDate, Minutes = g.Sum(x => x.DurationMinutes) })
-            .ToListAsync(ct);
-        var submissions = await _db.DailySubmissions.AsNoTracking()
+            .ToListAsync(ct) : [];
+        var submissions = showDaily ? await _db.DailySubmissions.AsNoTracking()
             .Where(x => userIds.Contains(x.UserId) && x.WorkDate >= start && x.WorkDate < end)
             .Select(x => new { x.UserId, x.WorkDate, x.Status, x.DayType })
-            .ToListAsync(ct);
+            .ToListAsync(ct) : [];
         var minutesByUser = daily.GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => g.ToDictionary(x => x.WorkDate, x => x.Minutes));
         var marksByUser = submissions.GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => g.ToDictionary(x => x.WorkDate));
 
@@ -161,6 +177,7 @@ public class ReportService : IReportService
             minutesByUser.TryGetValue(x.User.Id, out var minutes);
             marksByUser.TryGetValue(x.User.Id, out var marks);
             var kpi = ScoreDays(weekdays, minutes, marks?.ToDictionary(pair => pair.Key, pair => new DayMark(pair.Value.Status, pair.Value.DayType)));
+            var actualHours = WorkMetrics.Hours(loggedMinutes.GetValueOrDefault(x.User.Id));
             return new TeamReportRowDto
             {
                 UserId = x.User.Id,
@@ -173,7 +190,7 @@ public class ReportService : IReportService
                 Blocked = x.Blocked,
                 Cancelled = x.Cancelled,
                 PlannedHours = x.PlannedHours,
-                ActualHours = x.ActualHours,
+                ActualHours = actualHours,
                 CompletionPercent = x.CompletionPercent,
                 AvailableDays = kpi.Available,
                 DaysLogged = kpi.Logged,
@@ -182,8 +199,8 @@ public class ReportService : IReportService
                 LowHourDays = kpi.Low,
                 LeaveDays = kpi.Leave,
                 HolidayDays = kpi.Holiday,
-                HoursAttainment = Rate(x.ActualHours, x.PlannedHours),
-                UtilizationPercent = Rate(x.ActualHours, kpi.Available * ExpectedHoursPerDay),
+                HoursAttainment = Rate(actualHours, x.PlannedHours),
+                UtilizationPercent = Rate(actualHours, kpi.Available * ExpectedHoursPerDay),
                 UpdateCompliance = Rate(kpi.Submitted, kpi.Available)
             };
         }).OrderBy(x => x.Name).ToList();
@@ -200,11 +217,12 @@ public class ReportService : IReportService
             Year = year,
             Month = month,
             IncludesSelf = includeSelf,
+            IncludesDailyMetrics = showDaily,
             PlannedTasks = planned,
             CompletedTasks = completed,
             PlannedHours = plannedHours,
             ActualHours = actualHours,
-            CompletionPercent = WorkMetrics.Completion(completed, planned),
+            CompletionPercent = WorkRecords.PlanCompletion(allTasks.Select(x => (x.Status, x.ProgressPercent, x.EstimatedHours))) ?? 0,
             AvailableDays = availableDays,
             DaysLogged = rows.Sum(x => x.DaysLogged),
             MissingDays = rows.Sum(x => x.MissingDays),

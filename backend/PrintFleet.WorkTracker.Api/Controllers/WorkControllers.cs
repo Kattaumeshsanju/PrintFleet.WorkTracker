@@ -126,10 +126,49 @@ public class DailyWorkController : ControllerBase
     public async Task<ActionResult<DayViewDto>> Mark(MarkDayRequest request, CancellationToken ct)
         => Ok(await _daily.SetDayMarkAsync(request, ct));
 
-    [Authorize(Roles = Roles.Managers)]
+    [Authorize(Roles = Roles.Admin)]
     [HttpPost("reopen")]
     public async Task<ActionResult<DayViewDto>> Reopen(ReopenDayRequest request, CancellationToken ct)
         => Ok(await _daily.ReopenAsync(request, ct));
+}
+
+[ApiController]
+[Authorize]
+[Route("api/department-plans")]
+public class DepartmentPlansController : ControllerBase
+{
+    private readonly IDepartmentPlanService _plans;
+
+    public DepartmentPlansController(IDepartmentPlanService plans) => _plans = plans;
+
+    [Authorize(Roles = Roles.Managers)]
+    [HttpPost]
+    public async Task<ActionResult<DepartmentPlanDto>> Ensure(SaveDepartmentPlanRequest request, CancellationToken ct)
+        => Ok(await _plans.EnsureAsync(request, ct));
+
+    [Authorize(Roles = Roles.Managers)]
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<DepartmentPlanDto>> Update(Guid id, SaveDepartmentPlanRequest request, CancellationToken ct)
+        => Ok(await _plans.UpdateAsync(id, request, ct));
+}
+
+[ApiController]
+[Authorize]
+[Route("api/organization")]
+public class OrganizationController : ControllerBase
+{
+    private readonly IOrganizationService _organization;
+
+    public OrganizationController(IOrganizationService organization) => _organization = organization;
+
+    [HttpGet]
+    public async Task<ActionResult<OrganizationDashboardDto>> Get([FromQuery] int year, [FromQuery] int month, [FromQuery] Guid? departmentId, [FromQuery] Guid? projectId, [FromQuery] string? status, [FromQuery] string? projectStatus, [FromQuery] DateOnly? dueBefore, [FromQuery] Guid? userId, CancellationToken ct)
+    {
+        var today = DateTime.Today;
+        if (year == 0) year = today.Year;
+        if (month == 0) month = today.Month;
+        return Ok(await _organization.GetAsync(year, month, departmentId, projectId, status, projectStatus, dueBefore, userId, ct));
+    }
 }
 
 [ApiController]
@@ -163,6 +202,20 @@ public class NotificationsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<NotificationDto>>> List(CancellationToken ct)
         => Ok(await _notifications.GetAsync(ct));
+
+    [HttpPost("{id:guid}/read")]
+    public async Task<IActionResult> Read(Guid id, CancellationToken ct)
+    {
+        await _notifications.MarkReadAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("read-all")]
+    public async Task<IActionResult> ReadAll(CancellationToken ct)
+    {
+        await _notifications.MarkAllReadAsync(ct);
+        return NoContent();
+    }
 }
 
 [ApiController]
@@ -191,14 +244,13 @@ public class ReportsController : ControllerBase
         return Ok(await _reports.MonthlyAsync(year, month, userId, ct));
     }
 
-    [Authorize(Roles = Roles.Managers)]
     [HttpGet("team")]
-    public async Task<ActionResult<TeamReportDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, CancellationToken ct)
+    public async Task<ActionResult<TeamReportDto>> Team([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, [FromQuery] bool organization, CancellationToken ct)
     {
         var today = DateTime.Today;
         if (year == 0) year = today.Year;
         if (month == 0) month = today.Month;
-        return Ok(await _reports.TeamAsync(year, month, includeSelf, departmentId, ct));
+        return Ok(await _reports.TeamAsync(year, month, includeSelf, departmentId, organization, ct));
     }
 
     [HttpGet("monthly/export")]
@@ -214,14 +266,13 @@ public class ReportsController : ControllerBase
             : File(_export.MonthlyExcel(report), Excel, $"{name}.xlsx");
     }
 
-    [Authorize(Roles = Roles.Managers)]
     [HttpGet("team/export")]
-    public async Task<IActionResult> TeamExport([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, [FromQuery] string format = "xlsx", CancellationToken ct = default)
+    public async Task<IActionResult> TeamExport([FromQuery] int year, [FromQuery] int month, [FromQuery] bool includeSelf, [FromQuery] Guid? departmentId, [FromQuery] bool organization, [FromQuery] string format = "xlsx", CancellationToken ct = default)
     {
         var today = DateTime.Today;
         if (year == 0) year = today.Year;
         if (month == 0) month = today.Month;
-        var report = await _reports.TeamAsync(year, month, includeSelf, departmentId, ct);
+        var report = await _reports.TeamAsync(year, month, includeSelf, departmentId, organization, ct);
         var name = $"team-{year}-{month:00}";
         return format.Equals("pdf", StringComparison.OrdinalIgnoreCase)
             ? File(_export.TeamPdf(report), "application/pdf", $"{name}.pdf")

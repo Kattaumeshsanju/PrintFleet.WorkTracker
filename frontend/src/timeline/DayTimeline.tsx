@@ -40,7 +40,7 @@ export function DayTimeline({ entries, dayType, onSelect }: { entries: DailyEntr
           </span>
         ))}
       </div>
-      <div className="relative h-16 rounded-xl bg-[#efeadd]">
+      <div className="relative h-16 rounded-xl bg-slate-200">
         {entries.map((entry) => {
           const left = ((minutes(entry.startTime) - bounds.start) / span) * 100;
           const width = Math.max(2.5, ((minutes(entry.endTime) - minutes(entry.startTime)) / span) * 100);

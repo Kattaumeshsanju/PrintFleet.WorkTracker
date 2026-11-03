@@ -66,6 +66,58 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.CeoInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ActivateOnAccept")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvitedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("Email", "Status");
+
+                    b.ToTable("CeoInvitations");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.DailySubmission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -159,6 +211,12 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Property<DateOnly>("WorkDate")
                         .HasColumnType("date");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("MonthlyTaskId");
@@ -168,6 +226,8 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.HasIndex("WorkDate");
 
                     b.HasIndex("UserId", "WorkDate");
+
+                    b.HasIndex("UserId", "WorkDate", "StartTime");
 
                     b.ToTable("DailyWorkEntries");
                 });
@@ -180,6 +240,11 @@ namespace PrintFleet.WorkTracker.Api.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -194,11 +259,260 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.ToTable("Departments");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.DepartmentMonthlyPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Risks")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("DepartmentMonthlyPlans");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.EmailDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorType")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("EmailDeliveries");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Initiative", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Conclusion")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ExperimentPlan")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Hypothesis")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ResearchObjective")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ResearchStage")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SuccessCriteria")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateOnly?>("TargetEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("TargetStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("WorkCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("WorkCategoryId");
+
+                    b.HasIndex("DepartmentId", "Status");
+
+                    b.ToTable("Initiatives");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.InitiativeCollaborator", b =>
+                {
+                    b.Property<Guid>("InitiativeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("InitiativeId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("InitiativeCollaborators");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.InitiativeMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("CompletedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("InitiativeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateOnly?>("TargetDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InitiativeId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("InitiativeMilestones");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyTask", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ActualEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ActualStartDate")
+                        .HasColumnType("date");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -214,6 +528,9 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .HasPrecision(8, 2)
                         .HasColumnType("numeric(8,2)");
 
+                    b.Property<Guid?>("InitiativeId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("MonthlyWorkSheetId")
                         .HasColumnType("uuid");
 
@@ -227,6 +544,11 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("ProgressPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uuid");
@@ -251,13 +573,28 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("WorkCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("InitiativeId");
 
                     b.HasIndex("MonthlyWorkSheetId");
 
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("WorkCategoryId");
+
+                    b.HasIndex("Status", "PlannedEndDate");
 
                     b.ToTable("MonthlyTasks");
                 });
@@ -270,6 +607,12 @@ namespace PrintFleet.WorkTracker.Api.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DepartmentPlanId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("LockedAt")
                         .HasColumnType("timestamp with time zone");
@@ -296,9 +639,15 @@ namespace PrintFleet.WorkTracker.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DepartmentPlanId");
+
                     b.HasIndex("UserId");
 
                     b.HasIndex("Year", "Month");
+
+                    b.HasIndex("DepartmentId", "Year", "Month");
 
                     b.HasIndex("UserId", "Year", "Month")
                         .IsUnique();
@@ -335,6 +684,16 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Medium");
+
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("date");
 
@@ -346,6 +705,9 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("WorkCategoryId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -353,7 +715,205 @@ namespace PrintFleet.WorkTracker.Api.Migrations
 
                     b.HasIndex("DepartmentId");
 
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("WorkCategoryId");
+
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.ResearchRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceLinks")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Findings")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("InitiativeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("NextSteps")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Objective")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateOnly>("RecordedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InitiativeId", "RecordedOn");
+
+                    b.ToTable("ResearchRecords");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcceptedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvitedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("Email", "Status");
+
+                    b.ToTable("TeamInvitations");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LinkPath")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("DepartmentId", "CreatedAt");
+
+                    b.HasIndex("SenderId", "CreatedAt");
+
+                    b.ToTable("TeamNotices");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNoticeRecipient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("NoticeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NoticeId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "ReadAt");
+
+                    b.ToTable("TeamNoticeRecipients");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.User", b =>
@@ -405,6 +965,70 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.UserPermission", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Permission")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GrantedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("UserId", "Permission");
+
+                    b.ToTable("UserPermissions");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.WorkCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId", "NameKey")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" = true");
+
+                    b.ToTable("WorkCategories");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.DailySubmission", b =>
                 {
                     b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "User")
@@ -435,8 +1059,104 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.DepartmentMonthlyPlan", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.EmailDelivery", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.TeamNoticeRecipient", "Recipient")
+                        .WithOne("Delivery")
+                        .HasForeignKey("PrintFleet.WorkTracker.Api.Models.EmailDelivery", "RecipientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recipient");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Initiative", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.WorkCategory", "WorkCategory")
+                        .WithMany()
+                        .HasForeignKey("WorkCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("WorkCategory");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.InitiativeCollaborator", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Initiative", "Initiative")
+                        .WithMany("Collaborators")
+                        .HasForeignKey("InitiativeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Initiative");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.InitiativeMilestone", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Initiative", "Initiative")
+                        .WithMany("Milestones")
+                        .HasForeignKey("InitiativeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Initiative");
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyTask", b =>
                 {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Initiative", "Initiative")
+                        .WithMany()
+                        .HasForeignKey("InitiativeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PrintFleet.WorkTracker.Api.Models.MonthlyWorkSheet", "Sheet")
                         .WithMany("Tasks")
                         .HasForeignKey("MonthlyWorkSheetId")
@@ -448,18 +1168,41 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.WorkCategory", "WorkCategory")
+                        .WithMany()
+                        .HasForeignKey("WorkCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Initiative");
+
                     b.Navigation("Project");
 
                     b.Navigation("Sheet");
+
+                    b.Navigation("WorkCategory");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyWorkSheet", b =>
                 {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.DepartmentMonthlyPlan", "DepartmentPlan")
+                        .WithMany("Sheets")
+                        .HasForeignKey("DepartmentPlanId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "User")
                         .WithMany("Sheets")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Department");
+
+                    b.Navigation("DepartmentPlan");
 
                     b.Navigation("User");
                 });
@@ -471,7 +1214,84 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                         .HasForeignKey("DepartmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.WorkCategory", "WorkCategory")
+                        .WithMany()
+                        .HasForeignKey("WorkCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Department");
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("WorkCategory");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.ResearchRecord", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Initiative", "Initiative")
+                        .WithMany("Records")
+                        .HasForeignKey("InitiativeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Initiative");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamInvitation", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNotice", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNoticeRecipient", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.TeamNotice", "Notice")
+                        .WithMany("Recipients")
+                        .HasForeignKey("NoticeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Notice");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.User", b =>
@@ -484,11 +1304,47 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Navigation("Department");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.UserPermission", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.User", "User")
+                        .WithMany("Permissions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.WorkCategory", b =>
+                {
+                    b.HasOne("PrintFleet.WorkTracker.Api.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Department", b =>
                 {
                     b.Navigation("Projects");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.DepartmentMonthlyPlan", b =>
+                {
+                    b.Navigation("Sheets");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.Initiative", b =>
+                {
+                    b.Navigation("Collaborators");
+
+                    b.Navigation("Milestones");
+
+                    b.Navigation("Records");
                 });
 
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.MonthlyTask", b =>
@@ -506,9 +1362,21 @@ namespace PrintFleet.WorkTracker.Api.Migrations
                     b.Navigation("Tasks");
                 });
 
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNotice", b =>
+                {
+                    b.Navigation("Recipients");
+                });
+
+            modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.TeamNoticeRecipient", b =>
+                {
+                    b.Navigation("Delivery");
+                });
+
             modelBuilder.Entity("PrintFleet.WorkTracker.Api.Models.User", b =>
                 {
                     b.Navigation("DailyEntries");
+
+                    b.Navigation("Permissions");
 
                     b.Navigation("Sheets");
 

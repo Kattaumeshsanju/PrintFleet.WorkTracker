@@ -64,15 +64,18 @@ public class DashboardService : IDashboardService
         var usersQuery = await _access.ScopeUsersAsync(_db.Users.AsNoTracking().Where(x => x.IsActive), null, ct);
         var users = await usersQuery.OrderBy(x => x.Name).ToListAsync(ct);
         var userIds = users.Select(x => x.Id).ToArray();
-        var entries = await _db.DailyWorkEntries.AsNoTracking()
+        var showDaily = await _access.IsOrganizationViewerAsync(ct);
+        var entries = showDaily ? await _db.DailyWorkEntries.AsNoTracking()
             .Include(x => x.User)
             .Include(x => x.MonthlyTask).ThenInclude(x => x.Project)
             .Where(x => x.WorkDate == day && userIds.Contains(x.UserId))
             .OrderBy(x => x.StartTime)
-            .ToListAsync(ct);
-        var submissions = await _db.DailySubmissions.AsNoTracking()
-            .Where(x => x.WorkDate == day && userIds.Contains(x.UserId))
-            .ToDictionaryAsync(x => x.UserId, x => x.DayType ?? x.Status, ct);
+            .ToListAsync(ct) : [];
+        var submissions = showDaily
+            ? await _db.DailySubmissions.AsNoTracking()
+                .Where(x => x.WorkDate == day && userIds.Contains(x.UserId))
+                .ToDictionaryAsync(x => x.UserId, x => x.DayType ?? x.Status, ct)
+            : new Dictionary<Guid, string>();
 
         var counts = await _db.MonthlyTasks.AsNoTracking()
             .Where(x => x.Sheet.Year == day.Year && x.Sheet.Month == day.Month && userIds.Contains(x.Sheet.UserId))

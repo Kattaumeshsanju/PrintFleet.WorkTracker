@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Badge, Button, Field, Loading, PageHeader, Panel, inputClass, useToast } from "../components/ui";
 import { api, downloadFile, errorText } from "../services/api";
 import type { MonthlyReport, User } from "../types";
-import { canManage, currentMonthValue, formatHours, label, monthLabel, parseMonth } from "../utils/format";
+import { canManage, canViewOrganization, currentMonthValue, formatHours, goalCompletion, label, monthLabel, parseMonth } from "../utils/format";
 
 const colors = ["#1d6b60", "#b7771f", "#2f5f98", "#a33b32", "#8a8175"];
 
@@ -21,7 +21,7 @@ export function ReportPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [rangeError, setRangeError] = useState("");
-  const lead = canManage(user?.role);
+  const lead = canManage(user?.role) || canViewOrganization(user?.role);
 
   useEffect(() => { if (lead) api<User[]>("/api/users").then(setPeople).catch(() => undefined); }, [lead]);
 
@@ -80,7 +80,7 @@ export function ReportPage() {
         <Panel><div className="text-xs text-muted uppercase">Planned / completed</div><div className="font-display text-2xl">{report.plannedTasks} / {report.completed}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">In progress / blocked</div><div className="font-display text-2xl">{report.inProgress} / {report.blocked}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">Planned vs actual</div><div className="font-display text-2xl">{formatHours(report.plannedHours)} / {formatHours(report.actualHours)}</div></Panel>
-        <Panel><div className="text-xs text-muted uppercase">Average daily</div><div className="font-display text-2xl">{report.averageDailyHours}h</div><div className="text-xs text-muted">{report.completionPercent}% complete</div></Panel>
+        <Panel><div className="text-xs text-muted uppercase">Average daily</div><div className="font-display text-2xl">{report.averageDailyHours}h</div><div className="text-xs text-muted">{goalCompletion(report.completionPercent, report.plannedTasks)} complete</div></Panel>
       </div>
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel title="Daily hours"><div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={hours}><CartesianGrid stroke="#eee6d8" vertical={false} /><XAxis dataKey="day" /><YAxis /><Tooltip /><Bar dataKey="hours" fill="#1d6b60" /></BarChart></ResponsiveContainer></div></Panel>
