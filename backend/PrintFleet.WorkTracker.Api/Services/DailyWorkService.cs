@@ -271,7 +271,7 @@ public class DailyWorkService : IDailyWorkService
     public async Task<CalendarDto> GetCalendarAsync(int year, int month, Guid? userId, CancellationToken ct)
     {
         if (month is < 1 or > 12) throw new AppException("Month must be between 1 and 12.");
-        var target = await ResolveUserAsync(userId, ct);
+        var target = await ResolveCalendarUserAsync(userId, ct);
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == target, ct)
             ?? throw new AppException("Employee was not found.", StatusCodes.Status404NotFound);
 
@@ -383,6 +383,16 @@ public class DailyWorkService : IDailyWorkService
         if (requested is null || requested == Guid.Empty || requested == _current.UserId)
             return _current.UserId;
         await _access.EnsureCanViewDailyAsync(requested.Value, ct);
+        return requested.Value;
+    }
+
+    private async Task<Guid> ResolveCalendarUserAsync(Guid? requested, CancellationToken ct)
+    {
+        if (requested is null || requested == Guid.Empty || requested == _current.UserId)
+            return _current.UserId;
+        if (await _access.IsOrganizationViewerAsync(ct))
+            return requested.Value;
+        await _access.EnsureCanManageUserAsync(requested.Value, ct);
         return requested.Value;
     }
 

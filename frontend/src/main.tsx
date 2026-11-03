@@ -4,16 +4,20 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.tsx";
 import { AuthProvider } from "./auth/AuthContext.tsx";
 import { ToastProvider } from "./components/ui.tsx";
+import { serverUnderMaintenance } from "./maintenance.ts";
+import { MaintenancePage } from "./pages/MaintenancePage.tsx";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <ToastProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    {serverUnderMaintenance ? <MaintenancePage /> : (
+      <BrowserRouter>
+        <ToastProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    )}
   </StrictMode>,
 );

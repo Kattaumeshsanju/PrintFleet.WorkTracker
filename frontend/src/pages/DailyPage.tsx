@@ -7,19 +7,20 @@ import { Badge, Button, Loading, PageHeader, Panel, useToast } from "../componen
 import { DayTimeline } from "../timeline/DayTimeline";
 import { api, downloadFile, errorText } from "../services/api";
 import type { CalendarMonth, DailyEntry, DayView, MonthlySheet, User } from "../types";
-import { canViewOrganization, formatMinutes, label, todayInput } from "../utils/format";
+import { canViewOrganization, formatMinutes, label, monthLabel, parseMonth, todayInput } from "../utils/format";
 
 export function DailyPage() {
   const { user } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const [date, setDate] = useState(params.get("date") ?? todayInput());
+  const [calendarMonth, setCalendarMonth] = useState((params.get("date") ?? todayInput()).slice(0, 7));
   const [userId, setUserId] = useState(params.get("userId") ?? "");
   const [day, setDay] = useState<DayView | null>(null);
   const [sheet, setSheet] = useState<MonthlySheet | null>(null);
   const [calendar, setCalendar] = useState<CalendarMonth | null>(null);
   const [people, setPeople] = useState<User[]>([]);
-  const [tab, setTab] = useState<"timeline" | "table" | "calendar">("timeline");
+  const [tab, setTab] = useState<"timeline" | "table">("timeline");
   const [editing, setEditing] = useState<DailyEntry | null>(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<DailyEntry | null>(null);
@@ -32,13 +33,13 @@ export function DailyPage() {
     const owner = reviewer && nextUser ? nextUser : undefined;
     const query = new URLSearchParams({ date: nextDate });
     if (owner) query.set("userId", owner);
-    const month = nextDate.slice(0, 7);
-    const [year, monthNumber] = month.split("-").map(Number);
+    const [planYear, planMonth] = nextDate.slice(0, 7).split("-").map(Number);
+    const [year, monthNumber] = (calendarMonth || nextDate.slice(0, 7)).split("-").map(Number);
     const calendarQuery = new URLSearchParams({ year: String(year), month: String(monthNumber) });
     if (owner) calendarQuery.set("userId", owner);
     const [dayData, plan, monthData] = await Promise.all([
       api<DayView>(`/api/daily-work/day?${query}`),
-      api<MonthlySheet>("/api/monthly-work", { method: "POST", body: JSON.stringify({ year, month: monthNumber, userId: owner ?? null }) }),
+      api<MonthlySheet>("/api/monthly-work", { method: "POST", body: JSON.stringify({ year: planYear, month: planMonth, userId: owner ?? null }) }),
       api<CalendarMonth>(`/api/daily-work/calendar?${calendarQuery}`),
     ]);
     setDay(dayData);
@@ -53,10 +54,17 @@ export function DailyPage() {
 
   useEffect(() => {
     load().catch((err) => setError(errorText(err)));
-  }, [date, userId]);
+  }, [date, userId, calendarMonth]);
+
+  function shiftCalendar(delta: number) {
+    const { year, month } = parseMonth(calendarMonth);
+    const next = new Date(year, month - 1 + delta, 1);
+    setCalendarMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+  }
 
   function changeDate(value: string) {
     setDate(value);
+    setCalendarMonth(value.slice(0, 7));
     const next = new URLSearchParams(params);
     next.set("date", value);
     if (userId) next.set("userId", userId);
@@ -139,8 +147,22 @@ export function DailyPage() {
         {day.monthLocked ? <Badge value="Locked" /> : null}
         <div className="ml-auto font-display text-xl font-semibold">Daily total: {formatMinutes(day.totalMinutes)}</div>
       </div>
+      <div className="mb-4">
+        <Panel
+          title={`Submitted dates · ${calendar?.userName ?? day.userName}`}
+          action={
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <button type="button" className="rounded-lg border border-line px-2 py-1" onClick={() => shiftCalendar(-1)} aria-label="Previous month">←</button>
+              <span>{monthLabel(calendar?.year ?? parseMonth(calendarMonth).year, calendar?.month ?? parseMonth(calendarMonth).month)}</span>
+              <button type="button" className="rounded-lg border border-line px-2 py-1" onClick={() => shiftCalendar(1)} aria-label="Next month">→</button>
+            </div>
+          }
+        >
+          {calendar ? <MonthCalendar days={calendar.days} userName={calendar.userName} selected={date} onPick={changeDate} /> : <Loading />}
+        </Panel>
+      </div>
       <div className="mb-4 flex gap-2">
-        {(["timeline", "table", "calendar"] as const).map((item) => (
+        {(["timeline", "table"] as const).map((item) => (
           <button key={item} className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${tab === item ? "bg-ink text-white" : "bg-card ring-1 ring-line"}`} onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
@@ -174,7 +196,6 @@ export function DailyPage() {
           </table>
         </div>
       ) : null}
-      {tab === "calendar" && calendar ? <Panel><MonthCalendar days={calendar.days} selected={date} onPick={(value) => { changeDate(value); setTab("timeline"); }} /></Panel> : null}
 
       {selected ? (
         <Panel title="Activity">

@@ -177,7 +177,7 @@ public class UserService : IUserService
         var sheet = await _monthly.FindSheetAsync(id, year, month, ct);
         var start = new DateOnly(year, month, 1);
         var end = start.AddMonths(1);
-        var calendar = seeDaily ? await _daily.GetCalendarAsync(year, month, id, ct) : new CalendarDto { Year = year, Month = month };
+        var calendar = await _daily.GetCalendarAsync(year, month, id, ct);
         var entries = seeDaily ? await _db.DailyWorkEntries.AsNoTracking()
             .Include(x => x.User)
             .Include(x => x.MonthlyTask).ThenInclude(x => x.Project)

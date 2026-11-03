@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useAuth } from "../auth/AuthContext";
 import { MonthCalendar } from "../calendar/MonthCalendar";
 import { Badge, Loading, PageHeader, Panel } from "../components/ui";
 import { api, errorText } from "../services/api";
 import type { EmployeeOverview } from "../types";
-import { currentMonthValue, formatHours, formatMinutes, monthLabel, parseMonth, shortDate } from "../utils/format";
+import { canViewOrganization, currentMonthValue, formatHours, formatMinutes, monthLabel, parseMonth, shortDate } from "../utils/format";
 
 export function EmployeePage() {
   const { userId = "" } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [month, setMonth] = useState(currentMonthValue());
   const [data, setData] = useState<EmployeeOverview | null>(null);
@@ -40,6 +42,15 @@ export function EmployeePage() {
         <Panel><div className="text-xs text-muted uppercase">Planned hours</div><div className="font-display text-2xl font-semibold">{formatHours(data.plannedHours)}</div></Panel>
         <Panel><div className="text-xs text-muted uppercase">Actual hours</div><div className="font-display text-2xl font-semibold">{formatHours(data.actualHours)}</div></Panel>
       </div>
+      <Panel title={`Submitted dates · ${data.user.name}`}>
+        <MonthCalendar
+          days={data.hoursByDay}
+          userName={data.user.name}
+          onPick={(value) => {
+            if (data.user.id === user?.id || canViewOrganization(user?.role)) navigate(`/daily?userId=${data.user.id}&date=${value}`);
+          }}
+        />
+      </Panel>
       <Panel title="Hours by day">
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -69,9 +80,6 @@ export function EmployeePage() {
             <div>{entry.description} <span className="text-muted">({formatMinutes(entry.durationMinutes)})</span></div>
           </div>
         ))}
-      </Panel>
-      <Panel title="Calendar">
-        <MonthCalendar days={data.hoursByDay} onPick={(value) => navigate(`/daily?userId=${data.user.id}&date=${value}`)} />
       </Panel>
       <Panel title="Remarks">
         {data.remarks.length === 0 ? <div className="text-sm text-muted">No remarks this month.</div> : <ul className="list-disc space-y-1 pl-5 text-sm">{data.remarks.map((remark) => <li key={remark}>{remark}</li>)}</ul>}
