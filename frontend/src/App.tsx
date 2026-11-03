@@ -35,6 +35,7 @@ const ExecutiveResearch = lazy(() => import("./pages/executive/ExecutiveResearch
 const DepartmentsPage = lazy(() => import("./pages/DepartmentsPage").then((module) => ({ default: module.DepartmentsPage })));
 const OrganizationAccessPage = lazy(() => import("./pages/OrganizationAccessPage").then((module) => ({ default: module.OrganizationAccessPage })));
 const TeamTodayPage = lazy(() => import("./pages/TeamTodayPage").then((module) => ({ default: module.TeamTodayPage })));
+const ReminderSettingsPage = lazy(() => import("./pages/ReminderSettingsPage").then((module) => ({ default: module.ReminderSettingsPage })));
 
 function RequireAuth() {
   const { user, loading } = useAuth();
@@ -143,6 +144,7 @@ export default function App() {
             <Route path="organization-access" element={<OrganizationAccessPage />} />
             <Route path="team-today" element={<TeamTodayPage />} />
             <Route path="team-notices" element={<OrganizationTeamHistoryPage />} />
+            <Route path="settings/reminders" element={<ReminderSettingsPage />} />
           </Route>
         </Route>
       </Route>

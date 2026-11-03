@@ -94,8 +94,15 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
-builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.Configure<GraphMailOptions>(builder.Configuration.GetSection("Email:Graph"));
+builder.Services.AddHttpClient("graph");
+builder.Services.AddSingleton<SmtpEmailSender>();
+builder.Services.AddSingleton<IGraphMailbox, GraphMailbox>();
+builder.Services.AddSingleton<IEmailSender, RoutingEmailSender>();
+builder.Services.AddScoped<PlanReminderCatalog>();
+builder.Services.AddScoped<IPlanReminderAdminService, PlanReminderAdminService>();
 builder.Services.AddHostedService<DailyReminderService>();
+builder.Services.AddHostedService<PlanReminderService>();
 builder.Services.AddHostedService<TeamMailDispatcher>();
 
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];

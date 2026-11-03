@@ -140,6 +140,29 @@ public static class EmailDeliveryStatuses
     public const string Bounced = "Bounced";
 }
 
+public static class PlanReminderTypes
+{
+    public const string PersonalPlan = "PersonalPlan";
+    public const string MissingPlan = "MissingPlan";
+    public const string DepartmentSummary = "DepartmentSummary";
+    public const string Test = "Test";
+}
+
+public static class PlanReminderStatuses
+{
+    public const string Pending = "Pending";
+    public const string Processing = "Processing";
+    public const string Accepted = "Accepted";
+    public const string Failed = "Failed";
+}
+
+public static class PlanReminderRunStatuses
+{
+    public const string Running = "Running";
+    public const string Completed = "Completed";
+    public const string Failed = "Failed";
+}
+
 public static class AuditActions
 {
     public const string Created = "Created";

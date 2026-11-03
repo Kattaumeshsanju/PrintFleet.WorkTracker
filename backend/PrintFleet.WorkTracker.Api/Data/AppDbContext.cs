@@ -22,6 +22,9 @@ public class AppDbContext : DbContext
     public DbSet<TeamNotice> TeamNotices => Set<TeamNotice>();
     public DbSet<TeamNoticeRecipient> TeamNoticeRecipients => Set<TeamNoticeRecipient>();
     public DbSet<EmailDelivery> EmailDeliveries => Set<EmailDelivery>();
+    public DbSet<PlanReminderSettings> PlanReminderSettings => Set<PlanReminderSettings>();
+    public DbSet<PlanReminderRun> PlanReminderRuns => Set<PlanReminderRun>();
+    public DbSet<PlanReminderDelivery> PlanReminderDeliveries => Set<PlanReminderDelivery>();
     public DbSet<WorkCategory> WorkCategories => Set<WorkCategory>();
     public DbSet<Initiative> Initiatives => Set<Initiative>();
     public DbSet<InitiativeCollaborator> InitiativeCollaborators => Set<InitiativeCollaborator>();
@@ -227,5 +230,24 @@ public class AppDbContext : DbContext
         audit.Property(x => x.EntityType).HasMaxLength(60).IsRequired();
         audit.Property(x => x.UserName).HasMaxLength(120);
         audit.Property(x => x.Details).HasMaxLength(2000);
+
+        var reminderSettings = modelBuilder.Entity<PlanReminderSettings>();
+        reminderSettings.Property(x => x.Weekdays).HasMaxLength(32).IsRequired();
+
+        var reminderRun = modelBuilder.Entity<PlanReminderRun>();
+        reminderRun.HasIndex(x => x.ScheduledDate).IsUnique();
+        reminderRun.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        reminderRun.Property(x => x.FailureDetail).HasMaxLength(200);
+
+        var planDelivery = modelBuilder.Entity<PlanReminderDelivery>();
+        planDelivery.HasIndex(x => x.IdempotencyKey).IsUnique();
+        planDelivery.HasIndex(x => new { x.ScheduledDate, x.Status });
+        planDelivery.Property(x => x.DepartmentName).HasMaxLength(120).IsRequired();
+        planDelivery.Property(x => x.RecipientEmail).HasMaxLength(200).IsRequired();
+        planDelivery.Property(x => x.Subject).HasMaxLength(200).IsRequired();
+        planDelivery.Property(x => x.MessageType).HasMaxLength(40).IsRequired();
+        planDelivery.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        planDelivery.Property(x => x.FailureDetail).HasMaxLength(200);
+        planDelivery.Property(x => x.IdempotencyKey).HasMaxLength(120).IsRequired();
     }
 }

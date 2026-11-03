@@ -74,6 +74,7 @@ const navigation: NavSection[] = [
     id: "system",
     label: "System",
     items: [
+      { to: "/settings/reminders", label: "Email Reminders", icon: Mail, roles: ["Admin"] },
       { to: "/settings", label: "Settings", icon: Settings, roles: ["Admin", "CEO", "TeamLead", "TeamMember"] },
     ],
   },

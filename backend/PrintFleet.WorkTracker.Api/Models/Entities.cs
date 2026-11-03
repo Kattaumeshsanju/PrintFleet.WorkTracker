@@ -321,6 +321,54 @@ public class EmailDelivery
     public DateTime UpdatedAt { get; set; }
 }
 
+public class PlanReminderSettings
+{
+    public Guid Id { get; set; }
+    public bool Enabled { get; set; }
+    public bool MissingPlanEnabled { get; set; } = true;
+    public bool DepartmentSummaryEnabled { get; set; }
+    public int Hour { get; set; } = 17;
+    public int Minute { get; set; }
+    public string Weekdays { get; set; } = "1,2,3,4,5";
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class PlanReminderRun
+{
+    public Guid Id { get; set; }
+    public DateOnly ScheduledDate { get; set; }
+    public DateTime StartedAt { get; set; }
+    public DateTime? FinishedAt { get; set; }
+    public string Status { get; set; } = PlanReminderRunStatuses.Running;
+    public int AcceptedCount { get; set; }
+    public int FailedCount { get; set; }
+    public string? FailureDetail { get; set; }
+}
+
+public class PlanReminderDelivery
+{
+    public Guid Id { get; set; }
+    public Guid? RunId { get; set; }
+    public DateOnly ScheduledDate { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public string DepartmentName { get; set; } = "";
+    public Guid UserId { get; set; }
+    public string RecipientEmail { get; set; } = "";
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Subject { get; set; } = "";
+    public string MessageType { get; set; } = PlanReminderTypes.PersonalPlan;
+    public int Attempts { get; set; }
+    public string Status { get; set; } = PlanReminderStatuses.Pending;
+    public bool Retryable { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
+    public string? FailureDetail { get; set; }
+    public string IdempotencyKey { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class AuditLog
 {
     public long Id { get; set; }

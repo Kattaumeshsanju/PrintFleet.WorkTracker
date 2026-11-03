@@ -353,7 +353,7 @@ public class TeamLeadService : ITeamLeadService
 
     public async Task<int> DispatchDueAsync(CancellationToken ct)
     {
-        if (!_options.CanSend) return 0;
+        if (!_email.CanSend) return 0;
         var now = DateTime.UtcNow;
         var due = await _db.EmailDeliveries
             .Include(x => x.Recipient).ThenInclude(x => x.Notice).ThenInclude(x => x.Sender)
@@ -378,8 +378,10 @@ public class TeamLeadService : ITeamLeadService
             }
             catch (Exception ex)
             {
-                var permanent = ex is InvalidAddressException || ex is ParseException || (ex is SmtpCommandException smtp && (int)smtp.StatusCode >= 500);
-                var errorType = ex is InvalidAddressException or ParseException ? "InvalidAddress" : permanent ? "Permanent" : ex.GetType().Name;
+                var graph = ex as GraphMailException;
+                var permanent = graph is { Transient: false } || ex is InvalidAddressException || ex is ParseException || (ex is SmtpCommandException smtp && (int)smtp.StatusCode >= 500);
+                var errorType = graph?.ErrorType
+                    ?? (ex is InvalidAddressException or ParseException ? "InvalidAddress" : permanent ? "Permanent" : ex.GetType().Name);
                 TeamNoticeRules.RecordAttempt(delivery, false, errorType, permanent, DateTime.UtcNow);
                 _logger.LogWarning("Team mail {DeliveryId} failed with {ErrorType}", delivery.Id, errorType);
             }

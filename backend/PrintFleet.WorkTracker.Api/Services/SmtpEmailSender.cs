@@ -7,6 +7,7 @@ namespace PrintFleet.WorkTracker.Api.Services;
 
 public interface IEmailSender
 {
+    bool CanSend { get; }
     Task SendAsync(string to, string subject, string body, CancellationToken ct);
     Task SendRichAsync(string to, string subject, string text, string html, string? replyTo, string? replyName, CancellationToken ct);
 }
@@ -16,6 +17,8 @@ public class SmtpEmailSender : IEmailSender
     private readonly EmailOptions _options;
 
     public SmtpEmailSender(IOptions<EmailOptions> options) => _options = options.Value;
+
+    public bool CanSend => _options.CanSend;
 
     public async Task SendAsync(string to, string subject, string body, CancellationToken ct)
     {

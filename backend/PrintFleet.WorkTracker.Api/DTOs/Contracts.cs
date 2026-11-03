@@ -979,6 +979,59 @@ public class OrganizationPersonDto
     public bool StatusEditable { get; set; }
 }
 
+public class PlanReminderSettingsDto
+{
+    public bool OutlookReady { get; set; }
+    public string OutlookStatus { get; set; } = "";
+    public string Sender { get; set; } = "";
+    public bool Enabled { get; set; }
+    public bool MissingPlanEnabled { get; set; }
+    public bool DepartmentSummaryEnabled { get; set; }
+    public int Hour { get; set; }
+    public int Minute { get; set; }
+    public IReadOnlyList<int> Weekdays { get; set; } = [];
+    public string TimeZone { get; set; } = "Asia/Kolkata";
+    public int RecipientCount { get; set; }
+    public DateTime? LastSuccessAt { get; set; }
+    public DateTime? LastFailureAt { get; set; }
+    public string? LastFailureDetail { get; set; }
+}
+
+public class SavePlanReminderSettingsRequest
+{
+    public bool Enabled { get; set; }
+    public bool MissingPlanEnabled { get; set; }
+    public bool DepartmentSummaryEnabled { get; set; }
+    public int Hour { get; set; } = 17;
+    public int Minute { get; set; }
+    public List<int> Weekdays { get; set; } = [];
+}
+
+public class PlanReminderPreviewDto
+{
+    public string Subject { get; set; } = "";
+    public string Text { get; set; } = "";
+    public string Html { get; set; } = "";
+    public bool Sample { get; set; }
+}
+
+public class PlanReminderDeliveryDto
+{
+    public Guid Id { get; set; }
+    public DateOnly ScheduledDate { get; set; }
+    public string DepartmentName { get; set; } = "";
+    public string RecipientEmail { get; set; } = "";
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Subject { get; set; } = "";
+    public string MessageType { get; set; } = "";
+    public int Attempts { get; set; }
+    public string Status { get; set; } = "";
+    public string StatusLabel { get; set; } = "";
+    public DateTime? LastAttemptAt { get; set; }
+    public string? FailureDetail { get; set; }
+}
+
 public class CeoInvitationDto
 {
     public Guid Id { get; set; }
